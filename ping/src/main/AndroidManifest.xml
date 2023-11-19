@@ -16,7 +16,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Common_ui_list_structure">
         <activity
-            android:name=".MainActivity"
+            android:name=".control.MainActivity"
             android:configChanges="keyboard|keyboardHidden"
             android:exported="true"
             android:theme="@style/Theme.Common_ui_list_structure">
@@ -27,7 +27,7 @@
             </intent-filter>
         </activity>
         <service
-            android:name=".PingPagerService"
+            android:name=".wallpaper.PingPagerService"
             android:exported="true"
             android:permission="android.permission.BIND_WALLPAPER">
             <intent-filter>
@@ -38,7 +38,7 @@
                 android:resource="@xml/ping_pager" />
         </service>
         <service
-            android:name=".PingWorldService"
+            android:name=".wallpaper.PingWorldService"
             android:exported="true"
             android:permission="android.permission.BIND_WALLPAPER">
             <intent-filter>
@@ -49,7 +49,7 @@
                 android:resource="@xml/ping_world" />
         </service>
         <service
-            android:name=".PingBookService"
+            android:name=".wallpaper.PingBookService"
             android:exported="true"
             android:permission="android.permission.BIND_WALLPAPER">
             <intent-filter>

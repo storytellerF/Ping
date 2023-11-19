@@ -1,4 +1,4 @@
-package com.storyteller_f.ping
+package com.storyteller_f.ping.control
 
 import android.app.Activity
 import android.app.WallpaperManager
@@ -9,7 +9,6 @@ import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.doOnPreDraw
@@ -29,10 +28,19 @@ import com.storyteller_f.annotation_defination.BindLongClickEvent
 import com.storyteller_f.common_ui.SimpleFragment
 import com.storyteller_f.common_ui.cycle
 import com.storyteller_f.common_ui.scope
+import com.storyteller_f.ping.wallpaper.PingBookService
+import com.storyteller_f.ping.wallpaper.PingPagerService
+import com.storyteller_f.ping.wallpaper.PingWorldService
+import com.storyteller_f.ping.R
+import com.storyteller_f.ping.bookDataStore
 import com.storyteller_f.ping.database.Wallpaper
 import com.storyteller_f.ping.database.requireMainDatabase
 import com.storyteller_f.ping.databinding.FragmentWallpaperListBinding
 import com.storyteller_f.ping.databinding.ViewHolderWallpaperBinding
+import com.storyteller_f.ping.pagerDataStore
+import com.storyteller_f.ping.preview
+import com.storyteller_f.ping.selected
+import com.storyteller_f.ping.worldDataStore
 import com.storyteller_f.ui_list.adapter.ManualAdapter
 import com.storyteller_f.ui_list.core.AbstractViewHolder
 import com.storyteller_f.ui_list.core.BindingViewHolder

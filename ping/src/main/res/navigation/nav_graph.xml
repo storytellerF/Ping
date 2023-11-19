@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/WallpaperListFragment"
-        android:name="com.storyteller_f.ping.WallpaperListFragment"
+        android:name="com.storyteller_f.ping.control.WallpaperListFragment"
         android:label="@string/wallpaper_fragment_label"
         tools:layout="@layout/fragment_wallpaper_list">
 
@@ -17,7 +17,7 @@
     </fragment>
     <fragment
         android:id="@+id/WallpaperInfoFragment"
-        android:name="com.storyteller_f.ping.WallpaperInfoFragment"
+        android:name="com.storyteller_f.ping.control.WallpaperInfoFragment"
         android:label="@string/wallpaper_info_fragment_label"
         tools:layout="@layout/fragment_wallpaper_info">
         <argument

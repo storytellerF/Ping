@@ -1,4 +1,4 @@
-package com.storyteller_f.ping
+package com.storyteller_f.ping.control
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -20,6 +20,7 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import com.storyteller_f.common_ui.scope
 import com.storyteller_f.file_system_ktx.ensureDirs
 import com.storyteller_f.file_system_ktx.ensureFile
+import com.storyteller_f.ping.R
 import com.storyteller_f.ping.database.Wallpaper
 import com.storyteller_f.ping.database.requireMainDatabase
 import com.storyteller_f.ping.databinding.ActivityMainBinding

@@ -1,4 +1,4 @@
-package com.storyteller_f.ping
+package com.storyteller_f.ping.wallpaper
 
 import com.live2d.sdk.cubism.framework.CubismFramework
 import com.live2d.sdk.cubism.framework.CubismFrameworkConfig

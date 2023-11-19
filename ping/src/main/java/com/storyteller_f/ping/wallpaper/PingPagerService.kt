@@ -1,20 +1,28 @@
-package com.storyteller_f.ping
+package com.storyteller_f.ping.wallpaper
 
+import android.app.ActivityManager
 import android.app.WallpaperColors
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaPlayer
+import android.net.Uri
 import android.opengl.GLSurfaceView
-import android.opengl.GLSurfaceView.RENDERMODE_CONTINUOUSLY
 import android.os.Build
 import android.os.Bundle
 import android.service.wallpaper.WallpaperService
 import android.util.Log
-import android.view.MotionEvent
+import android.util.Size
 import android.view.SurfaceHolder
-import com.storyteller_f.ping.cubism.Delegate
-import com.storyteller_f.ping.cubism.GLRenderer
+import androidx.core.content.ContextCompat
+import com.storyteller_f.ping.pagerDataStore
+import com.storyteller_f.ping.selectedWallPaper
+import com.storyteller_f.ping.shader.GLES20WallpaperRenderer
+import com.storyteller_f.ping.shader.GLES30WallpaperRenderer
+import com.storyteller_f.ping.shader.GLWallpaperRenderer
+import com.storyteller_f.ping.shader.Offset
+import com.storyteller_f.ping.shader.VideoMatrix
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,15 +34,13 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.CoroutineContext
 
-
-class PingBookService : WallpaperService() {
+class PingPagerService : WallpaperService() {
     val job = Job()
     val scope = object : CoroutineScope {
         override val coroutineContext: CoroutineContext
             get() = job + Dispatchers.Main
 
     }
-
 
     override fun onUnbind(intent: Intent?): Boolean {
         Log.d(TAG, "onUnbind() called with: intent = $intent")
@@ -43,7 +49,7 @@ class PingBookService : WallpaperService() {
 
     override fun onCreateEngine(): Engine {
         Log.d(TAG, "onCreateEngine() called")
-        return CubismEngine(this, System.currentTimeMillis())
+        return PingEngine(this)
     }
 
     override fun onDestroy() {
@@ -52,17 +58,42 @@ class PingBookService : WallpaperService() {
         job.cancel()
     }
 
-    private inner class CubismEngine(private val inContext: Context, val index: Long) :
-        WallpaperService.Engine() {
+    private inner class PingEngine(private val inContext: Context) : WallpaperService.Engine() {
         private var currentThumbnail: Bitmap? = null
+        private val player: MediaPlayer = MediaPlayer().apply {
+            isLooping = true
+            setOnVideoSizeChangedListener { player, width, height ->
+                renderer.binding.setVideoMatrix(VideoMatrix(width, height, 0), player)
+            }
+            setOnPreparedListener {
+                Log.i(TAG, "OnPreparedListener")
+                it.start()
+            }
+        }
+        private val renderer: GLWallpaperRenderer = run {
+            val systemService =
+                ContextCompat.getSystemService(inContext, ActivityManager::class.java)
+                    ?: throw Exception("无法获得activity manager")
+            val deviceConfigurationInfo = systemService.deviceConfigurationInfo
+            when {
+                deviceConfigurationInfo.reqGlEsVersion >= 0x30000 -> {
+                    GLES30WallpaperRenderer(inContext)
+                }
 
-        private val renderer = GLRenderer(Delegate(inContext))
+                deviceConfigurationInfo.reqGlEsVersion >= 0x20000 -> {
+                    GLES20WallpaperRenderer(inContext)
+                }
 
-        private val surfaceView = GLPingSurfaceView(inContext).apply {
-            setEGLContextClientVersion(2)
-            preserveEGLContextOnPause = true
-            setRenderer(renderer)
-            renderMode = RENDERMODE_CONTINUOUSLY
+                else -> throw RuntimeException("can not get gl version")
+            }
+        }
+
+        private val surfaceView: GLPingSurfaceView by lazy {
+            GLPingSurfaceView(inContext).apply {
+                setEGLContextClientVersion(renderer.version)
+                preserveEGLContextOnPause = true
+                setRenderer(renderer)
+            }
         }
 
         inner class GLPingSurfaceView(context: Context) : GLSurfaceView(context) {
@@ -70,25 +101,29 @@ class PingBookService : WallpaperService() {
             fun destroy() = super.onDetachedFromWindow()
         }
 
-        init {
+        private fun observeLatestUri() {
             scope.launch {
-                inContext.bookDataStore.data.mapNotNull { preferences ->
+                inContext.pagerDataStore.data.mapNotNull { preferences ->
                     // No type safety.
                     preferences.selectedWallPaper()
-                }.distinctUntilChanged().collectLatest { jsonFilePath ->
-                    val parent = File(jsonFilePath).parent
-                    val thumbnail = File(parent, "thumbnail.jpg")
+                }.distinctUntilChanged().collectLatest {
+                    val file = File(it)
+                    val thumbnail = File(file.parentFile, "thumbnail.jpg")
                     Log.i(
                         TAG,
-                        "wallpaper $jsonFilePath thumb${thumbnail.absolutePath} ${thumbnail.exists()}"
+                        "wallpaper $it thumb${thumbnail.absolutePath} ${thumbnail.exists()}"
                     )
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && thumbnail.exists()) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                         currentThumbnail = withContext(Dispatchers.IO) {
                             BitmapFactory.decodeFile(thumbnail.absolutePath)
                         }
                         notifyColorsChanged()
                     }
-                    renderer.plugModel(jsonFilePath)
+                    player.run {
+                        stop()
+                        setDataSource(inContext, Uri.fromFile(file))
+                        prepareAsync()
+                    }
                 }
             }
         }
@@ -104,15 +139,28 @@ class PingBookService : WallpaperService() {
         }
 
         override fun onCreate(surfaceHolder: SurfaceHolder?) {
-            Log.d(TAG, "onCreate() $index called with: surfaceHolder = $surfaceHolder")
+            Log.d(TAG, "onCreate() called with: surfaceHolder = $surfaceHolder")
             super.onCreate(surfaceHolder)
+            surfaceView
+            observeLatestUri()
         }
 
         override fun onDestroy() {
-            Log.d(TAG, "onDestroy() $index called")
+            Log.d(TAG, "onDestroy() called")
             super.onDestroy()
-            renderer.destroy()
+            player.release()
             surfaceView.destroy()
+        }
+
+        override fun onVisibilityChanged(visible: Boolean) {
+            val playing = player.isPlaying
+            Log.d(TAG, "onVisibilityChanged() called with: visible = $visible $playing")
+            if (visible) {
+                if (!playing) player.start()
+            } else {
+                if (playing) player.pause()
+            }
+            super.onVisibilityChanged(visible)
         }
 
         /**
@@ -134,6 +182,7 @@ class PingBookService : WallpaperService() {
             super.onOffsetsChanged(
                 xOffset, yOffset, xOffsetStep, yOffsetStep, xPixelOffset, yPixelOffset
             )
+            renderer.binding.setOffset(Offset(xOffset, yOffset))
         }
 
         override fun onSurfaceChanged(
@@ -141,9 +190,10 @@ class PingBookService : WallpaperService() {
         ) {
             Log.d(
                 TAG,
-                "onSurfaceChanged() $index called with: holder = $holder, format = $format, width = $width, height = $height"
+                "onSurfaceChanged() called with: holder = $holder, format = $format, width = $width, height = $height"
             )
             super.onSurfaceChanged(holder, format, width, height)
+            renderer.binding.setScreenSize(Size(width, height))
         }
 
         override fun onSurfaceRedrawNeeded(holder: SurfaceHolder?) {
@@ -152,13 +202,16 @@ class PingBookService : WallpaperService() {
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder?) {
-            Log.d(TAG, "onSurfaceCreated() $index called with: holder = $holder")
+            Log.d(TAG, "onSurfaceCreated() called with: holder = $holder")
             super.onSurfaceCreated(holder)
             holder ?: return
+            val width = holder.surfaceFrame?.width() ?: return
+            val height = holder.surfaceFrame.height()
+            renderer.binding.setScreenSize(Size(width, height))
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder?) {
-            Log.d(TAG, "onSurfaceDestroyed() $index called with: holder = $holder")
+            Log.d(TAG, "onSurfaceDestroyed() called with: holder = $holder")
             super.onSurfaceDestroyed(holder)
         }
 
@@ -171,18 +224,10 @@ class PingBookService : WallpaperService() {
         } else {
             null
         }
-
-        override fun onTouchEvent(event: MotionEvent?) {
-            super.onTouchEvent(event)
-            event ?: return
-
-            renderer.onTouchEvent(event)
-            return super.onTouchEvent(event)
-        }
     }
 
     companion object {
-        private const val TAG = "PingBookService"
+        private const val TAG = "PingPagerService"
     }
 }
 

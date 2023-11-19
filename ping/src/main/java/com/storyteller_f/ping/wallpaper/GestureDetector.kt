@@ -1,4 +1,4 @@
-package com.storyteller_f.ping
+package com.storyteller_f.ping.wallpaper
 
 import android.view.MotionEvent
 import com.google.android.filament.View

@@ -5,7 +5,7 @@ import android.opengl.GLES20
 import android.util.Log
 import com.live2d.sdk.cubism.core.ICubismLogger
 import com.live2d.sdk.cubism.framework.CubismFramework
-import com.storyteller_f.ping.DelegatePool
+import com.storyteller_f.ping.wallpaper.DelegatePool
 
 class Delegate(val context: Context) {
 

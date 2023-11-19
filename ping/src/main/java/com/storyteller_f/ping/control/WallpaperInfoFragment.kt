@@ -1,4 +1,4 @@
-package com.storyteller_f.ping
+package com.storyteller_f.ping.control
 
 import android.os.Bundle
 import androidx.core.view.ViewCompat
@@ -8,6 +8,7 @@ import androidx.transition.TransitionInflater
 import com.storyteller_f.common_ui.SimpleFragment
 import com.storyteller_f.common_ui.cycle
 import com.storyteller_f.common_ui.scope
+import com.storyteller_f.ping.R
 import com.storyteller_f.ping.database.requireMainDatabase
 import com.storyteller_f.ping.databinding.FragmentWallpaperInfoBinding
 import kotlinx.coroutines.flow.SharingStarted

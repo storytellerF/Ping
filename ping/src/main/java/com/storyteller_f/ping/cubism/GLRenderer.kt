@@ -2,7 +2,7 @@ package com.storyteller_f.ping.cubism
 
 import android.opengl.GLSurfaceView
 import android.view.MotionEvent
-import com.storyteller_f.ping.DelegatePool
+import com.storyteller_f.ping.wallpaper.DelegatePool
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
