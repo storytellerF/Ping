@@ -3,7 +3,7 @@ buildscript {
         val smlFolder: String? by project
         val versionManager: String by project
         val smlVersion = "0.0.2"
-        val navVersion = "2.7.5"
+        val navVersion = "2.7.6"
 
         classpath("androidx.navigation:navigation-safe-args-gradle-plugin:$navVersion")
         classpath("com.github.storytellerF.common-ui-list:version-manager:$versionManager")
@@ -15,9 +15,9 @@ buildscript {
 }
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-    val androidVersion = "8.3.0-alpha14"
-    val kotlinVersion = "1.9.10"
-    val kspVersion = "1.9.10-1.0.13"
+    val androidVersion = "8.4.0-alpha01"
+    val kotlinVersion = "1.9.20"
+    val kspVersion = "1.9.20-1.0.14"
     id("com.android.application") version androidVersion apply false
     id("com.android.library") version androidVersion apply false
     id("org.jetbrains.kotlin.android") version kotlinVersion apply false

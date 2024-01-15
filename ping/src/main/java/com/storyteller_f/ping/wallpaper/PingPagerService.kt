@@ -7,7 +7,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
-import android.net.Uri
 import android.opengl.GLSurfaceView
 import android.os.Build
 import android.os.Bundle
@@ -58,7 +57,7 @@ class PingPagerService : WallpaperService() {
         job.cancel()
     }
 
-    private inner class PingEngine(private val inContext: Context) : WallpaperService.Engine() {
+    private inner class PingEngine(inContext: Context) : WallpaperService.Engine() {
         private var currentThumbnail: Bitmap? = null
         private val player: MediaPlayer = MediaPlayer().apply {
             isLooping = true
@@ -101,9 +100,11 @@ class PingPagerService : WallpaperService() {
             fun destroy() = super.onDetachedFromWindow()
         }
 
+        val data = inContext.pagerDataStore.data
+
         private fun observeLatestUri() {
             scope.launch {
-                inContext.pagerDataStore.data.mapNotNull { preferences ->
+                data.mapNotNull { preferences ->
                     // No type safety.
                     preferences.selectedWallPaper()
                 }.distinctUntilChanged().collectLatest {
@@ -121,7 +122,7 @@ class PingPagerService : WallpaperService() {
                     }
                     player.run {
                         stop()
-                        setDataSource(inContext, Uri.fromFile(file))
+                        setDataSource(it)
                         prepareAsync()
                     }
                 }

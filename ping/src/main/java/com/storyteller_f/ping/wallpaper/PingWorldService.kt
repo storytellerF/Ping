@@ -83,7 +83,7 @@ class PingWorldService : WallpaperService() {
         job.cancel()
     }
 
-    private inner class FilamentEngine(val inContext: Context) : Engine() {
+    private inner class FilamentEngine(inContext: Context) : Engine() {
         private var currentThumbnail: Bitmap? = null
         var cameraFocalLength = 28f
             set(value) {
@@ -226,9 +226,11 @@ class PingWorldService : WallpaperService() {
         private val readyRenderables = IntArray(128) // add up to 128 entities at a time
         val display = ContextCompat.getDisplayOrDefault(inContext)
 
+        val data = inContext.worldDataStore.data
+
         private fun observeLatestUri() {
             scope.launch {
-                inContext.worldDataStore.data.mapNotNull { preferences ->
+                data.mapNotNull { preferences ->
                     // No type safety.
                     preferences.selectedWallPaper()
                 }.distinctUntilChanged().collectLatest { modelFile: String ->

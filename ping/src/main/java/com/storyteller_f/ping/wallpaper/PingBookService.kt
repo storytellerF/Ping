@@ -54,7 +54,7 @@ class PingBookService : WallpaperService() {
         job.cancel()
     }
 
-    private inner class CubismEngine(private val inContext: Context, val index: Long) :
+    private inner class CubismEngine(inContext: Context, val index: Long) :
         WallpaperService.Engine() {
         private var currentThumbnail: Bitmap? = null
 

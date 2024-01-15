@@ -164,7 +164,7 @@ class WallpaperListFragment :
     }
 }
 
-class WallpaperHolder(val wallpaper: Wallpaper) : DataItemHolder {
+class WallpaperHolder(val wallpaper: Wallpaper) : DataItemHolder() {
     override fun areItemsTheSame(other: DataItemHolder): Boolean {
         return (other as WallpaperHolder).wallpaper == wallpaper
     }

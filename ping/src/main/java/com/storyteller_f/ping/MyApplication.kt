@@ -6,7 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.android.material.color.DynamicColors
-import com.storyteller_f.ping.ui_list.HolderBuilder
+import com.storyteller_f.ping.control.ui_list.HolderBuilder
 import com.storyteller_f.ui_list.core.holders
 
 class MyApplication : Application() {
