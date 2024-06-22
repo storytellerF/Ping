@@ -101,6 +101,9 @@ class MainActivity : AppCompatActivity() {
 
     private suspend fun processEntry(dest: String, nextEntry: ZipEntry, stream: ZipInputStream) {
         val child = File(dest, nextEntry.name)
+        if (!child.canonicalPath.startsWith(dest)) {
+            return
+        }
         Log.i(TAG, "processEntry: ${child.absolutePath}")
         if (nextEntry.isDirectory) {
             child.ensureDirs()!!
