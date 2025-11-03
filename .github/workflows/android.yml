@@ -29,25 +29,8 @@ jobs:
     - name: rename
       run: mkdir ping/release;mv ping/build/outputs/apk/release/*.apk ping/release/ping.apk
 
-    #签名ping
-    - uses: noriban/sign-android-release@v3
-      name: Sign ping app APK
-      # ID used to access action output
-      id: sign_ping_app
-      with:
-        releaseDirectory: ping/release
-        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-        alias: ${{ secrets.ALIAS }}
-        keyStorePassword: ${{ secrets.STORE_PASSWORD }}
-        keyPassword: ${{ secrets.KEY_PASSWORD }}
-      env:
-        # override default build-tools version (29.0.3) -- optional
-        BUILD_TOOLS_VERSION: "33.0.1"
-
-    #签名结束
-
     # Example use of `signedReleaseFile` output -- not needed
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: Signed app bundle
         path: |

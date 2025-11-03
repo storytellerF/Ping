@@ -1,5 +1,6 @@
 [versions]
 activityKtx = "1.11.0"
+comStoryteller_fJksifyGradlePlugin = "43d82c9377"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
 databindingCompilerCommon = "8.13.0"
@@ -39,6 +40,7 @@ androidx-navigation-safe-args-gradle-plugin = { module = "androidx.navigation:na
 androidx-navigation-ui-ktx = { module = "androidx.navigation:navigation-ui-ktx", version.ref = "navigationUiKtx" }
 androidx-navigation-fragment-ktx = { module = "androidx.navigation:navigation-fragment-ktx", version.ref = "navigationFragmentKtx" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomCompiler" }
+com-storyteller_f-jksify-gradle-plugin = { module = "com.github.storytellerF.jksify:com.storyteller_f.jksify.gradle.plugin", version.ref = "comStoryteller_fJksifyGradlePlugin" }
 common-pr = { module = "com.github.storytellerF.common-ui-list:common-pr", version.ref = "fileSystemKtx" }
 compat-ktx = { module = "com.github.storytellerF.common-ui-list:compat-ktx", version.ref = "fileSystemKtx" }
 common-ktx = { module = "com.github.storytellerF.common-ui-list:common-ktx", version.ref = "fileSystemKtx" }
