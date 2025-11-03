@@ -11,11 +11,10 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import com.storyteller_f.ext_func_definition.ExtFuncFlat
 import com.storyteller_f.ext_func_definition.ExtFuncFlatType
-import com.storyteller_f.ui_list.core.Model
-import com.storyteller_f.ui_list.database.DefaultTypeConverter
 import kotlinx.coroutines.flow.Flow
 import java.util.Date
 
@@ -25,8 +24,18 @@ data class Wallpaper(
     val name: String,
     val createdTime: Date,
     val thumbnail: String
-) : Model {
-    override fun commonId() = uri
+)
+
+class Converters {
+    @TypeConverter
+    fun fromTimestamp(value: Long?): Date? {
+        return value?.let { Date(it) }
+    }
+
+    @TypeConverter
+    fun dateToTimestamp(date: Date?): Long? {
+        return date?.time
+    }
 }
 
 @Dao
@@ -57,7 +66,8 @@ interface MainDao {
 @Database(
     entities = [Wallpaper::class], version = 1, exportSchema = false
 )
-@TypeConverters(DefaultTypeConverter::class)
+
+@TypeConverters(Converters::class)
 abstract class MainDatabase : RoomDatabase() {
 
     abstract fun dao(): MainDao
@@ -72,8 +82,8 @@ abstract class MainDatabase : RoomDatabase() {
         }
 
         private fun buildDatabase(context: Context) = Room.databaseBuilder(
-            context.applicationContext, MainDatabase::class.java, "wallpapers.db"
-        ).fallbackToDestructiveMigration().build()
+                context.applicationContext, MainDatabase::class.java, "wallpapers.db"
+            ).fallbackToDestructiveMigration(false).build()
     }
 }
 

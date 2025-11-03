@@ -18,8 +18,6 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
 import com.storyteller_f.common_ui.scope
-import com.storyteller_f.file_system.ensureDirs
-import com.storyteller_f.file_system.ensureFile
 import com.storyteller_f.ping.R
 import com.storyteller_f.ping.database.Wallpaper
 import com.storyteller_f.ping.database.requireMainDatabase
@@ -39,6 +37,7 @@ import java.util.Calendar
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import kotlin.math.roundToInt
+import androidx.core.graphics.scale
 
 
 class MainActivity : AppCompatActivity() {
@@ -106,9 +105,10 @@ class MainActivity : AppCompatActivity() {
         }
         Log.i(TAG, "processEntry: ${child.absolutePath}")
         if (nextEntry.isDirectory) {
-            child.ensureDirs()!!
+            child.mkdirs()
         } else {
-            child.ensureFile()!!
+            child.parentFile?.mkdirs()
+            child.createNewFile()
             write(withContext(Dispatchers.IO) {
                 FileOutputStream(child)
             }, stream)
@@ -153,7 +153,9 @@ class MainActivity : AppCompatActivity() {
                 ""
             )
         } else {
-            val file = File(dest, "video.mp4").ensureFile() ?: return
+            val file = File(dest, "video.mp4")
+            file.parentFile?.mkdirs()
+            file.createNewFile()
             withContext(Dispatchers.IO) {
                 file.outputStream().sink().buffer().use { writer ->
                     contentResolver.openInputStream(uri)?.use { stream ->
@@ -163,7 +165,9 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            val iconFile = File(dest, "thumbnail.jpg").ensureFile() ?: return
+            val iconFile = File(dest, "thumbnail.jpg")
+            iconFile.parentFile?.mkdirs()
+            iconFile.createNewFile()
             createVideoThumbnailFromUri(this@MainActivity, file.toUri())?.let { thumbnail ->
                 withContext(Dispatchers.IO) {
                     FileOutputStream(iconFile).use {
@@ -227,6 +231,6 @@ fun createVideoThumbnailFromUri(
         val scale = 512f / max
         val w = (scale * width).roundToInt()
         val h = (scale * height).roundToInt()
-        Bitmap.createScaledBitmap(bitmap, w, h, true)
+        bitmap.scale(w, h)
     } else bitmap
 }

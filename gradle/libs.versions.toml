@@ -1,0 +1,63 @@
+[versions]
+activityKtx = "1.11.0"
+coreKtx = "1.17.0"
+appcompat = "1.7.1"
+databindingCompilerCommon = "8.13.0"
+datastorePreferences = "1.1.7"
+espressoCore = "3.7.0"
+filamentAndroid = "1.66.1"
+filamentUtilsAndroid = "1.66.1"
+fileSystemKtx = "a0fa18ddda"
+fragmentKtx = "1.8.9"
+junit = "4.13.2"
+junitVersion = "1.3.0"
+kotlinxCoroutinesAndroid = "1.10.2"
+kotlinxCoroutinesCore = "1.10.2"
+leakcanaryAndroid = "2.14"
+material = "1.13.0"
+multidex = "2.0.1"
+materialVersion = "1.9.4"
+navigationFragmentKtx = "2.9.5"
+navigationUiKtx = "2.9.5"
+okio = "3.16.2"
+glide = "5.0.5"
+roomCompiler = "2.8.3"
+startup = "2.4.0"
+uiTooling = "1.9.4"
+
+
+[libraries]
+androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-databinding-compiler-common = { module = "androidx.databinding:databinding-compiler-common", version.ref = "databindingCompilerCommon" }
+androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espressoCore" }
+androidx-fragment-ktx = { module = "androidx.fragment:fragment-ktx", version.ref = "fragmentKtx" }
+androidx-junit = { module = "androidx.test.ext:junit", version.ref = "junitVersion" }
+androidx-multidex = { module = "androidx.multidex:multidex", version.ref = "multidex" }
+androidx-navigation-safe-args-gradle-plugin = { module = "androidx.navigation:navigation-safe-args-gradle-plugin", version.ref = "navigationFragmentKtx" }
+androidx-navigation-ui-ktx = { module = "androidx.navigation:navigation-ui-ktx", version.ref = "navigationUiKtx" }
+androidx-navigation-fragment-ktx = { module = "androidx.navigation:navigation-fragment-ktx", version.ref = "navigationFragmentKtx" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomCompiler" }
+common-pr = { module = "com.github.storytellerF.common-ui-list:common-pr", version.ref = "fileSystemKtx" }
+compat-ktx = { module = "com.github.storytellerF.common-ui-list:compat-ktx", version.ref = "fileSystemKtx" }
+common-ktx = { module = "com.github.storytellerF.common-ui-list:common-ktx", version.ref = "fileSystemKtx" }
+common-ui = { module = "com.github.storytellerF.common-ui-list:common-ui", version.ref = "fileSystemKtx" }
+ext-func-compiler = { module = "com.github.storytellerF.common-ui-list:ext-func-compiler", version.ref = "fileSystemKtx" }
+filament-utils-android = { module = "com.google.android.filament:filament-utils-android", version.ref = "filamentUtilsAndroid" }
+filament-android = { module = "com.google.android.filament:filament-android", version.ref = "filamentAndroid" }
+glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
+gltfio-android = { module = "com.google.android.filament:gltfio-android", version.ref = "filamentAndroid" }
+junit = { module = "junit:junit", version.ref = "junit" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
+leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanaryAndroid" }
+material = { module = "com.google.android.material:material", version.ref = "material" }
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastorePreferences" }
+startup = { module = "com.github.storytellerF.Bao:startup", version.ref = "startup" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomCompiler" }
+
+[plugins]
+
+[bundles]

@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     tools:context=".control.WallpaperListFragment">
 
-    <com.storyteller_f.ui_list.ui.ListWithState
+    <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/content"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />

@@ -4,13 +4,12 @@ import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
-import androidx.annotation.RawRes
 import javax.microedition.khronos.opengles.GL10
 
 abstract class GLWallpaperRenderer(
     protected val context: Context,
-    @RawRes val vertexRes: Int,
-    @RawRes val fragmentRes: Int,
+    val vertexRes: Int,
+    val fragmentRes: Int,
     val version: Int
 ) : GLSurfaceView.Renderer {
 
@@ -52,6 +51,7 @@ abstract class GLWallpaperRenderer(
         mvpLocation
         binding
     }
+
     //生命周期函数
     override fun onSurfaceChanged(gl10: GL10, width: Int, height: Int) =
         GLES20.glViewport(0, 0, width, height)

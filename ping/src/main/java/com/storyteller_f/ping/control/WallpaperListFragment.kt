@@ -17,20 +17,17 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.flowWithLifecycle
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.FragmentNavigatorExtras
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
-import com.storyteller_f.annotation_defination.BindClickEvent
-import com.storyteller_f.annotation_defination.BindItemHolder
-import com.storyteller_f.annotation_defination.BindLongClickEvent
 import com.storyteller_f.common_ui.SimpleFragment
 import com.storyteller_f.common_ui.cycle
 import com.storyteller_f.common_ui.scope
-import com.storyteller_f.ping.wallpaper.PingBookService
-import com.storyteller_f.ping.wallpaper.PingPagerService
-import com.storyteller_f.ping.wallpaper.PingWorldService
 import com.storyteller_f.ping.R
 import com.storyteller_f.ping.bookDataStore
 import com.storyteller_f.ping.database.Wallpaper
@@ -40,16 +37,15 @@ import com.storyteller_f.ping.databinding.ViewHolderWallpaperBinding
 import com.storyteller_f.ping.pagerDataStore
 import com.storyteller_f.ping.preview
 import com.storyteller_f.ping.selected
+import com.storyteller_f.ping.wallpaper.PingBookService
+import com.storyteller_f.ping.wallpaper.PingPagerService
+import com.storyteller_f.ping.wallpaper.PingWorldService
 import com.storyteller_f.ping.worldDataStore
-import com.storyteller_f.ui_list.adapter.ManualAdapter
-import com.storyteller_f.ui_list.core.AbstractViewHolder
-import com.storyteller_f.ui_list.core.BindingViewHolder
-import com.storyteller_f.ui_list.core.DataItemHolder
-import com.storyteller_f.ui_list.ui.ListWithState
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 
@@ -58,30 +54,53 @@ class WallpaperListFragment :
 
     override fun onBindViewEvent(binding: FragmentWallpaperListBinding) {
         postponeEnterTransition()
-        val adapter = ManualAdapter<DataItemHolder, AbstractViewHolder<DataItemHolder>>()
-        binding.content.manualUp(adapter)
-        binding.content.flash(ListWithState.UIState.loading)
+        val adapter = object : ListAdapter<WallpaperHolder, RecyclerView.ViewHolder>(
+            object : DiffUtil.ItemCallback<WallpaperHolder>() {
+                override fun areItemsTheSame(
+                    oldItem: WallpaperHolder,
+                    newItem: WallpaperHolder
+                ): Boolean {
+                    return oldItem.areItemsTheSame(newItem)
+                }
+
+                override fun areContentsTheSame(
+                    oldItem: WallpaperHolder,
+                    newItem: WallpaperHolder
+                ): Boolean {
+                    return oldItem.areContentsTheSame(newItem)
+                }
+            }
+        ) {
+            override fun onCreateViewHolder(
+                parent: ViewGroup,
+                viewType: Int
+            ): RecyclerView.ViewHolder {
+                return buildWallpaperHolder(parent)
+            }
+
+            override fun onBindViewHolder(
+                holder: RecyclerView.ViewHolder,
+                position: Int
+            ) {
+                val wallpaperHolder = getItem(position)
+                (holder as WallpaperViewHolder).bindData(wallpaperHolder)
+            }
+        }
+        binding.content.adapter = adapter
+        val mainDao = requireContext().requireMainDatabase.dao()
         scope.launch {
-            requireMainDatabase.dao().selectAll()
+            mainDao.selectAll()
                 .flowWithLifecycle(cycle)
                 .shareIn(scope, SharingStarted.WhileSubscribed())
-                .collectLatest { wallpaperList ->
-                    binding.content.flash(
-                        ListWithState.UIState(
-                            false,
-                            wallpaperList.isNotEmpty(),
-                            empty = false,
-                            progress = false,
-                            null,
-                            null
-                        )
-                    )
-                    adapter.submitList(wallpaperList.map {
-                        WallpaperHolder(it)
-                    })
+                .onStart {
                     (binding.root.parent as? ViewGroup)?.doOnPreDraw {
                         startPostponedEnterTransition()
                     }
+                }
+                .collectLatest { wallpaperList ->
+                    adapter.submitList(wallpaperList.map {
+                        WallpaperHolder(it)
+                    })
                 }
         }
     }
@@ -106,7 +125,6 @@ class WallpaperListFragment :
             }
         }
 
-    @BindLongClickEvent(WallpaperHolder::class)
     fun previewWallpaper(itemHolder: WallpaperHolder) {
         val uri = itemHolder.wallpaper.uri
         scope.launch {
@@ -141,7 +159,6 @@ class WallpaperListFragment :
 
     }
 
-    @BindClickEvent(WallpaperHolder::class)
     fun openWallpaperInfo(
         holderView: View,
         itemHolder: WallpaperHolder,
@@ -164,16 +181,21 @@ class WallpaperListFragment :
     }
 }
 
-class WallpaperHolder(val wallpaper: Wallpaper) : DataItemHolder() {
-    override fun areItemsTheSame(other: DataItemHolder): Boolean {
-        return (other as WallpaperHolder).wallpaper == wallpaper
+class WallpaperHolder(val wallpaper: Wallpaper) {
+    fun areItemsTheSame(other: WallpaperHolder): Boolean {
+        return other.wallpaper == wallpaper
+    }
+
+    fun areContentsTheSame(other: WallpaperHolder): Boolean {
+        return other.wallpaper == wallpaper
     }
 }
 
-@BindItemHolder(WallpaperHolder::class)
 class WallpaperViewHolder(private val binding: ViewHolderWallpaperBinding) :
-    BindingViewHolder<WallpaperHolder>(binding) {
-    override fun bindData(itemHolder: WallpaperHolder) {
+    RecyclerView.ViewHolder(binding.root) {
+    var itemHolder: WallpaperHolder? = null
+    fun bindData(itemHolder: WallpaperHolder) {
+        this.itemHolder = itemHolder
         binding.flash(itemHolder.wallpaper)
         ViewCompat.setTransitionName(
             binding.root,

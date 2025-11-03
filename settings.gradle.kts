@@ -1,8 +1,6 @@
 @file:Suppress("UnstableApiUsage")
 
 pluginManagement {
-//    includeBuild("../../../common-ui-list/version-manager")
-//    includeBuild("../../../common-ui-list/common-publish")
     repositories {
         google()
         mavenCentral()
@@ -26,15 +24,3 @@ dependencyResolutionManagement {
 rootProject.name = "Ping"
 include(":ping")
 include(":CubismJavaFramework:framework")
-
-val commonUiListModules = listOf<String>(
-
-)
-val commonUiPath = File(rootDir, "../../common-ui-list")
-commonUiListModules.forEach {
-    val modulePath = File(commonUiPath, it)
-    if (modulePath.exists()) {
-        include(it)
-        project(":$it").projectDir = modulePath
-    }
-}
