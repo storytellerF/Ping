@@ -83,9 +83,9 @@ kotlin {
 }
 
 dependencies {
-    implementation(libs.androidx.datastore.preferences)
     implementation(libs.okio)
     implementation(libs.glide)
+
     implementation(libs.filament.android)
     implementation(libs.filament.utils.android)
     implementation(libs.gltfio.android)
@@ -93,29 +93,26 @@ dependencies {
     implementation(project(":CubismJavaFramework:framework"))
     implementation(fileTree("../Core/android"))
     implementation(libs.startup)
-    implementation(libs.common.ktx)
-    implementation(libs.compat.ktx)
     implementation(libs.common.ui)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    implementation(libs.androidx.fragment.ktx)
+    implementation(libs.androidx.activity.ktx)
+    ksp(libs.androidx.databinding.compiler.common)
+    implementation(libs.androidx.navigation.fragment.ktx)
+    implementation(libs.androidx.navigation.ui.ktx)
+    implementation(libs.androidx.datastore.preferences)
 
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.room.runtime)
-
-    implementation(libs.androidx.fragment.ktx)
-    implementation(libs.androidx.activity.ktx)
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
 
     debugImplementation(libs.leakcanary.android)
-    implementation(libs.androidx.multidex)
+
     ksp(libs.ext.func.compiler)
-    implementation(libs.common.pr)
-    ksp(libs.androidx.databinding.compiler.common)
-    implementation(libs.androidx.navigation.fragment.ktx)
-    implementation(libs.androidx.navigation.ui.ktx)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
