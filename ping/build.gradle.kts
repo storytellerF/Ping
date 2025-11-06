@@ -62,7 +62,7 @@ android {
                 signingConfig = releaseSignConfig
         }
     }
-    val javaVersion = JavaVersion.VERSION_17
+    val javaVersion = JavaVersion.VERSION_21
     compileOptions {
         sourceCompatibility = javaVersion
         targetCompatibility = javaVersion
@@ -76,7 +76,7 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_17
+        jvmTarget = JvmTarget.JVM_21
         optIn.add("kotlin.RequiresOptIn")
         freeCompilerArgs.add("-Xcontext-parameters")
     }
