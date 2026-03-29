@@ -1,14 +1,11 @@
-buildscript {
-    dependencies {
-        classpath(libs.androidx.navigation.safe.args.gradle.plugin)
-        classpath(libs.com.storyteller.f.jksify.gradle.plugin)
-    }
-}
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-    id("com.android.application") version "9.1.0" apply false
-    id("com.android.library") version "9.1.0" apply false
-    id("org.jetbrains.kotlin.jvm") version "2.3.20" apply false
-    id("com.google.devtools.ksp") version "2.3.6" apply false
-    id("app.cash.licensee") version "1.14.1" apply false
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.licensee) apply false
+    alias(libs.plugins.navigation.safeargs.kotlin) apply false
+    alias(libs.plugins.jksify) apply false
 }

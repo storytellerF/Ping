@@ -2,11 +2,11 @@ import com.storyteller_f.jksify.getenv
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("com.android.application")
-    id("com.google.devtools.ksp")
-    id("androidx.navigation.safeargs.kotlin")
-    id("com.storyteller_f.jksify")
-//    id("app.cash.licensee")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.navigation.safeargs.kotlin)
+    alias(libs.plugins.jksify)
+//    alias(libs.plugins.licensee)
 }
 android {
     namespace = "com.storyteller_f.ping"
