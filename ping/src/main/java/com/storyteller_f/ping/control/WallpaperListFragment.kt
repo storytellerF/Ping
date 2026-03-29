@@ -37,7 +37,7 @@ import com.storyteller_f.ping.databinding.ViewHolderWallpaperBinding
 import com.storyteller_f.ping.pagerDataStore
 import com.storyteller_f.ping.preview
 import com.storyteller_f.ping.selected
-import com.storyteller_f.ping.wallpaper.PingBookService
+//import com.storyteller_f.ping.wallpaper.PingBookService
 import com.storyteller_f.ping.wallpaper.PingPagerService
 import com.storyteller_f.ping.wallpaper.PingWorldService
 import com.storyteller_f.ping.worldDataStore
@@ -138,13 +138,14 @@ class WallpaperListFragment :
                     ComponentName(requireActivity(), PingWorldService::class.java)
                 )
             } else if (uri.endsWith("json")) {
-                bookDataStore.edit {
-                    it[preview] = uri
-                }
-                intent.putExtra(
-                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                    ComponentName(requireActivity(), PingBookService::class.java)
-                )
+                return@launch
+//                bookDataStore.edit {
+//                    it[preview] = uri
+//                }
+//                intent.putExtra(
+//                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+//                    ComponentName(requireActivity(), PingBookService::class.java)
+//                )
             } else {
                 pagerDataStore.edit {
                     it[preview] = uri

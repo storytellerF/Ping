@@ -47,4 +47,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Ping"
 include(":ping")
-include(":CubismJavaFramework:framework")
+//include(":CubismJavaFramework:framework")

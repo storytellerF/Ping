@@ -48,17 +48,17 @@
                 android:name="android.service.wallpaper"
                 android:resource="@xml/ping_world" />
         </service>
-        <service
-            android:name=".wallpaper.PingBookService"
-            android:exported="true"
-            android:permission="android.permission.BIND_WALLPAPER">
-            <intent-filter>
-                <action android:name="android.service.wallpaper.WallpaperService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.service.wallpaper"
-                android:resource="@xml/ping_book" />
-        </service>
+<!--        <service-->
+<!--            android:name=".wallpaper.PingBookService"-->
+<!--            android:exported="true"-->
+<!--            android:permission="android.permission.BIND_WALLPAPER">-->
+<!--            <intent-filter>-->
+<!--                <action android:name="android.service.wallpaper.WallpaperService" />-->
+<!--            </intent-filter>-->
+<!--            <meta-data-->
+<!--                android:name="android.service.wallpaper"-->
+<!--                android:resource="@xml/ping_book" />-->
+<!--        </service>-->
         <provider
             android:name=".StorageProvider"
             android:authorities="com.storyteller_f.ping.documents"

@@ -3,7 +3,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("androidx.navigation.safeargs.kotlin")
     id("com.storyteller_f.jksify")
@@ -44,11 +43,11 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            resValue(
-                "string",
-                "leak_canary_display_activity_label",
-                defaultConfig.applicationId?.substringAfterLast(".") ?: "Leaks"
-            )
+//            resValue(
+//                "string",
+//                "leak_canary_display_activity_label",
+//                defaultConfig.applicationId?.substringAfterLast(".") ?: "Leaks"
+//            )
         }
         release {
             isMinifyEnabled = true
@@ -90,8 +89,8 @@ dependencies {
     implementation(libs.filament.utils.android)
     implementation(libs.gltfio.android)
 
-    implementation(project(":CubismJavaFramework:framework"))
-    implementation(fileTree("../Core/android"))
+//    implementation(project(":CubismJavaFramework:framework"))
+//    implementation(fileTree("../Core/android"))
 //    implementation(libs.startup)
     implementation(libs.common.ui)
     implementation(libs.androidx.core.ktx)
