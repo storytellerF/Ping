@@ -92,7 +92,7 @@ dependencies {
 
     implementation(project(":CubismJavaFramework:framework"))
     implementation(fileTree("../Core/android"))
-    implementation(libs.startup)
+//    implementation(libs.startup)
     implementation(libs.common.ui)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
