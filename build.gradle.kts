@@ -7,5 +7,4 @@ plugins {
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.licensee) apply false
     alias(libs.plugins.navigation.safeargs.kotlin) apply false
-    alias(libs.plugins.jksify) apply false
 }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <wallpaper xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/ping_world"
-    android:settingsActivity="com.storyteller_f.ping.MainActivity"
+    android:description="@string/ping_book"
+    android:settingsActivity="com.storyteller_f.ping.control.MainActivity"
     android:thumbnail="@mipmap/ic_launcher" />

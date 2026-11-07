@@ -106,7 +106,7 @@ class PingPagerService : WallpaperService() {
             scope.launch {
                 data.mapNotNull { preferences ->
                     // No type safety.
-                    preferences.selectedWallPaper()
+                    preferences.selectedWallPaper(isPreview)
                 }.distinctUntilChanged().collectLatest {
                     val file = File(it)
                     val thumbnail = File(file.parentFile, "thumbnail.jpg")

@@ -109,14 +109,12 @@ class Live2DModel(
         val buffer = readFile(modelJsonName)
         modelSetting = CubismModelSettingJson(buffer)
 
-        try {
-            setupModelInternal(modelSetting)
-        } catch (e: Exception) {
-            Log.e(TAG, "setup: ", e)
-        }
+        setupModelInternal(modelSetting)
 
         // Setup renderer.
-        val renderer = CubismRendererAndroid.create()
+        val viewport = IntArray(4)
+        android.opengl.GLES20.glGetIntegerv(android.opengl.GLES20.GL_VIEWPORT, viewport, 0)
+        val renderer = CubismRendererAndroid.create(viewport[2], viewport[3])
         setupRenderer(renderer)
         setupTextures()
 
@@ -130,8 +128,8 @@ class Live2DModel(
     fun update() {
         val deltaTimeSeconds = pal.deltaTime
         dragManager.update(deltaTimeSeconds)
-        dragX = dragManager.x
-        dragY = dragManager.y
+        val dragX = dragManager.x
+        val dragY = dragManager.y
 
         // モーションによるパラメーター更新の有無
         var isMotionUpdated = false
@@ -192,7 +190,7 @@ class Live2DModel(
         }
 
         // Lip Sync Setting
-        if (lipSync) {
+        if (lipSyncIds.isNotEmpty()) {
             // リアルタイムでリップシンクを行う場合、システムから音量を取得して0~1の範囲で値を入力します
             val value = 0.0f
             for (i in lipSyncIds.indices) {
@@ -562,6 +560,7 @@ class Live2DModel(
     }
 
     fun release() {
+        textureManager.release()
         delete()
     }
 

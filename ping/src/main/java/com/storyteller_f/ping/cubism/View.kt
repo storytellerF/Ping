@@ -94,12 +94,6 @@ class View(delegate: Delegate) {
         // タッチ終了
         live2DManager.onDrag(0.0f, 0.0f)
 
-        // シングルタップ
-        // 論理座標変換した座標を取得
-        val x: Float = deviceToScreen.transformX(touchManager.lastX)
-        // 論理座標変換した座標を取得
-        val y: Float = deviceToScreen.transformY(touchManager.lastY)
-        live2DManager.onTap(x, y)
     }
 
     /**

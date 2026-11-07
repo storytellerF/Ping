@@ -1,36 +1,30 @@
-import com.storyteller_f.jksify.getenv
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.ksp)
     alias(libs.plugins.navigation.safeargs.kotlin)
-    alias(libs.plugins.jksify)
 //    alias(libs.plugins.licensee)
 }
 android {
     namespace = "com.storyteller_f.ping"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.storyteller_f.ping"
         minSdk = 26
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64", "x86") }
         versionCode = 1
         versionName = "1.0"
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
-        val signPath: String? = getenv("storyteller_f_sign_path")
-        val signKey: String? = getenv("storyteller_f_sign_key")
-        val signAlias: String? = getenv("storyteller_f_sign_alias")
-        val signStorePassword: String? = getenv("storyteller_f_sign_store_password")
-        val signKeyPassword: String? = getenv("storyteller_f_sign_key_password")
-        val signStorePath = when {
-            signPath != null -> File(signPath)
-            signKey != null -> layout.buildDirectory.file("signing/signing_key.jks").get().asFile
-            else -> null
-        }
+        val signPath = providers.environmentVariable("storyteller_f_sign_path").orNull
+        val signAlias = providers.environmentVariable("storyteller_f_sign_alias").orNull
+        val signStorePassword = providers.environmentVariable("storyteller_f_sign_store_password").orNull
+        val signKeyPassword = providers.environmentVariable("storyteller_f_sign_key_password").orNull
+        val signStorePath = signPath?.let(::File)
         if (signStorePath != null && signAlias != null && signStorePassword != null && signKeyPassword != null) {
             create("release") {
                 keyAlias = signAlias
@@ -71,6 +65,9 @@ android {
         viewBinding = true
         dataBinding = true
     }
+    providers.gradleProperty("live2dTestAssets").orNull?.let {
+        sourceSets.getByName("androidTest").assets.srcDir(it)
+    }
 }
 
 kotlin {
@@ -89,8 +86,8 @@ dependencies {
     implementation(libs.filament.utils.android)
     implementation(libs.gltfio.android)
 
-//    implementation(project(":CubismJavaFramework:framework"))
-//    implementation(fileTree("../Core/android"))
+    implementation(project(":cubism-framework"))
+    implementation(project(":purism-core"))
 //    implementation(libs.startup)
     implementation(libs.common.ui)
     implementation(libs.androidx.core.ktx)

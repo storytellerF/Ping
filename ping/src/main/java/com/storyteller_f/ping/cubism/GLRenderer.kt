@@ -2,7 +2,6 @@ package com.storyteller_f.ping.cubism
 
 import android.opengl.GLSurfaceView
 import android.view.MotionEvent
-import com.storyteller_f.ping.wallpaper.DelegatePool
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -16,9 +15,7 @@ class GLRenderer(private val delegate: Delegate) : GLSurfaceView.Renderer {
         delegate.onSurfaceChanged(width, height)
 
     // Called repeatedly for drawing.
-    override fun onDrawFrame(unused: GL10) = DelegatePool.judge(delegate) {
-        delegate.onDrawFrame()
-    }
+    override fun onDrawFrame(unused: GL10) = delegate.onDrawFrame()
 
     fun destroy() = delegate.destroy()
 

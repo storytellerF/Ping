@@ -232,7 +232,7 @@ class PingWorldService : WallpaperService() {
             scope.launch {
                 data.mapNotNull { preferences ->
                     // No type safety.
-                    preferences.selectedWallPaper()
+                    preferences.selectedWallPaper(isPreview)
                 }.distinctUntilChanged().collectLatest { modelFile: String ->
                     val file1 = File(modelFile)
                     val thumbnail = File(file1.parentFile, "thumbnail.jpg")

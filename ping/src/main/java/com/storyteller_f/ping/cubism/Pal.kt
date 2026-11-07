@@ -9,7 +9,8 @@ class Pal {
     // デルタタイムの更新
     fun updateTime() {
         val sCurrentFrame = systemNanoTime
-        _deltaNanoTime = sCurrentFrame - _lastNanoTime
+        _deltaNanoTime = if (_lastNanoTime == 0L) 0L else
+            (sCurrentFrame - _lastNanoTime).coerceAtMost(100_000_000L)
         _lastNanoTime = sCurrentFrame
     }
 

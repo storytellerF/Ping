@@ -3,13 +3,11 @@ package com.storyteller_f.ping.cubism
 import android.content.Context
 import android.util.Log
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44
-import com.live2d.sdk.cubism.framework.motion.ACubismMotion
-import com.live2d.sdk.cubism.framework.motion.IFinishedMotionCallback
 import java.io.File
 
 /**
  * サンプルアプリケーションにおいてCubismModelを管理するクラス。
- * モデル生成と破棄、タップイベントの処理、モデル切り替えを行う。
+ * モデル生成と破棄、モデル切り替えを行う。
  */
 class Live2DManager(
     val context: Context,
@@ -25,12 +23,11 @@ class Live2DManager(
             } ?: false
         }
     private var live2DModel: Live2DModel? = null
-    private var jsonFilePath: String? = null
+    private var pendingModelPath: String? = null
 
     // onUpdateメソッドで使用されるキャッシュ変数
     private val viewMatrix: CubismMatrix44 = CubismMatrix44.create()
     private val projection: CubismMatrix44 = CubismMatrix44.create()
-    private val finishedMotion = FinishedMotion()
 
     // モデル更新処理及び描画処理を行う
     fun onDrawFrame(width: Int, height: Int) {
@@ -63,39 +60,27 @@ class Live2DManager(
     }
 
     /**
-     * 画面をタップした時の処理
-     *
-     * @param x 画面のx座標
-     * @param y 画面のy座標
-     */
-    fun onTap(x: Float, y: Float) {
-
-        val model = live2DModel ?: return
-
-        // 頭をタップした場合表情をランダムで再生する
-        if (model.hitTest(HitAreaName.HEAD.id, x, y)) {
-
-            model.setRandomExpression()
-        } else if (model.hitTest(HitAreaName.BODY.id, x, y)) {
-
-            model.startRandomMotion(
-                MotionGroup.TAP_BODY.id,
-                Priority.NORMAL.priority,
-                finishedMotion
-            )
-        }
-    }
-
-    /**
      * シーンを切り替える
      *
      */
     private fun loadModel(jsonFilePath: String) {
         Log.d(TAG, "loadModel() called with: jsonFilePath = $jsonFilePath")
         val file = File(jsonFilePath)
-        live2DModel = Live2DModel(file.parent!!, file.name, context, pal).apply {
-            setup()
+        val candidate = Live2DModel(file.parent!!, file.name, context, pal)
+        try {
+            candidate.setup()
+        } catch (error: Exception) {
+            try {
+                candidate.release()
+            } catch (cleanup: Exception) {
+                error.addSuppressed(cleanup)
+            }
+            Log.e(TAG, "Model preparation failed; retaining current model", error)
+            return
         }
+        val previous = live2DModel
+        live2DModel = candidate
+        previous?.release()
         Log.i(TAG, "loadModel: $live2DModel")
 
         // 別レンダリング先を選択した際の背景クリア色
@@ -108,30 +93,24 @@ class Live2DManager(
     }
 
     fun plugModel(jsonFilePath: String) {
-        releaseCurrentModule()
-        this.jsonFilePath = jsonFilePath
+        // The GL thread retains the current model and displayed buffer while
+        // preparing its replacement. A failed load must not blank the wallpaper.
+        pendingModelPath = jsonFilePath
     }
 
     private fun loadModelIfNeed() {
-        val json = jsonFilePath
-        if (json != null && live2DModel == null) {
+        val json = pendingModelPath
+        if (json != null) {
+            pendingModelPath = null
             Log.d(TAG, "loadModelIfNeed() called")
             loadModel(json)
         }
     }
 
     fun releaseCurrentModule() {
+        pendingModelPath = null
         live2DModel?.release()
         live2DModel = null
-    }
-
-    /**
-     * モーション終了時に実行されるコールバック関数
-     */
-    private class FinishedMotion : IFinishedMotionCallback {
-        override fun execute(motion: ACubismMotion) {
-            Log.d(TAG, "execute() called with: motion = $motion")
-        }
     }
 
     companion object {

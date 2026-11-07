@@ -25,7 +25,8 @@ class TextureManager {
             }
         }
         // decodeStreamは乗算済みアルファとして画像を読み込むようである
-        val bitmap = BitmapFactory.decodeStream(FileInputStream(filePath))
+        val bitmap = FileInputStream(filePath).use { BitmapFactory.decodeStream(it) }
+            ?: error("Cannot decode model texture")
 
         // Texture0をアクティブにする
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
@@ -63,4 +64,9 @@ class TextureManager {
     }
 
     private val textures: MutableList<TextureInfo> = ArrayList() // 画像情報のリスト
+    fun release() {
+        val ids = textures.map { it.id }.toIntArray()
+        GLES20.glDeleteTextures(ids.size, ids, 0)
+        textures.clear()
+    }
 }
