@@ -5,7 +5,6 @@ import androidx.core.view.ViewCompat
 import androidx.lifecycle.flowWithLifecycle
 import androidx.navigation.fragment.navArgs
 import androidx.transition.TransitionInflater
-import com.storyteller_f.common_ui.SimpleFragment
 import com.storyteller_f.common_ui.cycle
 import com.storyteller_f.common_ui.scope
 import com.storyteller_f.ping.R
@@ -17,7 +16,7 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 
 class WallpaperInfoFragment :
-    SimpleFragment<FragmentWallpaperInfoBinding>(FragmentWallpaperInfoBinding::inflate) {
+    BindingFragment<FragmentWallpaperInfoBinding>(FragmentWallpaperInfoBinding::inflate) {
     private val args: WallpaperInfoFragmentArgs by navArgs()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

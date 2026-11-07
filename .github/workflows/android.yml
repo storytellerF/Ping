@@ -10,8 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: 'recursive'
 
       - name: Set up JDK 21
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -20,17 +18,28 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Restore release signing key
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Restore signing key
         env:
           SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY }}
         run: |
+          if [[ -z "$SIGNING_KEY_BASE64" ]]; then
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              echo "Release signing key is required for tagged builds" >&2
+              exit 1
+            fi
+            exit 0
+          fi
           printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/signing_key.jks"
           test -s "$RUNNER_TEMP/signing_key.jks"
           echo "storyteller_f_sign_path=$RUNNER_TEMP/signing_key.jks" >> "$GITHUB_ENV"
 
       - name: Build app
-        run: bash gradlew :ping:assembleRelease
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            bash gradlew :ping:assembleRelease
+          else
+            bash gradlew :ping:assembleAlpha
+          fi
         env:
           storyteller_f_sign_alias: ${{ secrets.ALIAS }}
           storyteller_f_sign_store_password: ${{ secrets.STORE_PASSWORD }}
@@ -40,7 +49,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ping-apk
-          path: ping/build/outputs/apk/release/*.apk
+          path: |
+            ping/build/outputs/apk/alpha/*.apk
+            ping/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
   release:

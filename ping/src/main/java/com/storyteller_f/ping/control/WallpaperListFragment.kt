@@ -5,6 +5,7 @@ import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.drawable.Drawable
+import android.os.Bundle
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -25,7 +26,6 @@ import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
-import com.storyteller_f.common_ui.SimpleFragment
 import com.storyteller_f.common_ui.cycle
 import com.storyteller_f.common_ui.scope
 import com.storyteller_f.ping.R
@@ -37,7 +37,7 @@ import com.storyteller_f.ping.databinding.ViewHolderWallpaperBinding
 import com.storyteller_f.ping.pagerDataStore
 import com.storyteller_f.ping.preview
 import com.storyteller_f.ping.selected
-//import com.storyteller_f.ping.wallpaper.PingBookService
+import com.storyteller_f.ping.wallpaper.PingBookService
 import com.storyteller_f.ping.wallpaper.PingPagerService
 import com.storyteller_f.ping.wallpaper.PingWorldService
 import com.storyteller_f.ping.worldDataStore
@@ -50,7 +50,7 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 
 class WallpaperListFragment :
-    SimpleFragment<FragmentWallpaperListBinding>(FragmentWallpaperListBinding::inflate) {
+    BindingFragment<FragmentWallpaperListBinding>(FragmentWallpaperListBinding::inflate) {
 
     override fun onBindViewEvent(binding: FragmentWallpaperListBinding) {
         postponeEnterTransition()
@@ -108,19 +108,31 @@ class WallpaperListFragment :
     private val pagerDataStore by lazy { requireContext().pagerDataStore }
     private val worldDataStore by lazy { requireContext().worldDataStore }
     private val bookDataStore by lazy { requireContext().bookDataStore }
+    private var previewKind = "video"
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        previewKind = savedInstanceState?.getString("previewKind") ?: "video"
+    }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("previewKind", previewKind)
+        super.onSaveInstanceState(outState)
+    }
 
     private val setWallpaper =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             Log.i(TAG, "choose: result ${result.resultCode}")
-            if (result.resultCode == Activity.RESULT_OK) {
-                scope.launch {
-                    val first = pagerDataStore.data.mapNotNull {
-                        it[preview]
-                    }.first()
-                    pagerDataStore.edit {
-                        it[selected] = first
-                        it[preview] = ""
+            scope.launch {
+                val store = when (previewKind) {
+                    "model" -> bookDataStore
+                    "world" -> worldDataStore
+                    else -> pagerDataStore
+                }
+                val pending = store.data.first()[preview]?.takeIf { it.isNotEmpty() }
+                store.edit {
+                    if (result.resultCode == Activity.RESULT_OK && pending != null) {
+                        it[selected] = pending
                     }
+                    it.remove(preview)
                 }
             }
         }
@@ -130,6 +142,7 @@ class WallpaperListFragment :
         scope.launch {
             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
             if (uri.endsWith("gltf")) {
+                previewKind = "world"
                 worldDataStore.edit {
                     it[preview] = uri
                 }
@@ -138,15 +151,16 @@ class WallpaperListFragment :
                     ComponentName(requireActivity(), PingWorldService::class.java)
                 )
             } else if (uri.endsWith("json")) {
-                return@launch
-//                bookDataStore.edit {
-//                    it[preview] = uri
-//                }
-//                intent.putExtra(
-//                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-//                    ComponentName(requireActivity(), PingBookService::class.java)
-//                )
+                previewKind = "model"
+                bookDataStore.edit {
+                    it[preview] = uri
+                }
+                intent.putExtra(
+                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                    ComponentName(requireActivity(), PingBookService::class.java)
+                )
             } else {
+                previewKind = "video"
                 pagerDataStore.edit {
                     it[preview] = uri
                 }

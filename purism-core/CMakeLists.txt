@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.22)
+project(purism_android LANGUAGES C CXX)
+include(FetchContent)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(PURISM_CORE_ABI v6 CACHE STRING "" FORCE)
+FetchContent_Declare(purism GIT_REPOSITORY https://github.com/SakuraMotion/PurismCore.git
+    GIT_TAG 1069334965522df5d0b791e97f01e26b19c45456)
+FetchContent_MakeAvailable(purism)
+add_library(Live2DCubismCoreJNI SHARED src/main/cpp/bridge.cpp)
+target_compile_features(Live2DCubismCoreJNI PRIVATE cxx_std_17)
+target_link_libraries(Live2DCubismCoreJNI PRIVATE PurismCore)

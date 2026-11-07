@@ -6,11 +6,18 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.android.material.color.DynamicColors
+import com.live2d.sdk.cubism.framework.CubismFramework
 
 class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         DynamicColors.applyToActivitiesIfAvailable(this)
+        CubismFramework.startUp(CubismFramework.Option().apply {
+            loadFileFunction = com.live2d.sdk.cubism.framework.ICubismLoadFileFunction { path ->
+                assets.open(path).use { it.readBytes() }
+            }
+        })
+        CubismFramework.initialize()
     }
 }
 
@@ -21,12 +28,12 @@ val Context.worldDataStore by preferencesDataStore(name = "world-settings")
 val Context.bookDataStore by preferencesDataStore(name = "book-settings")
 
 /**
- * 点击一个视频进入预览页时设置。在用户点击应用时，app 还无法立刻把结果保存到selected
- * 所以在展示的时候有限使用preview 定义的uri，同时在selected 设置完成后，preview 应该清除
+ * 预览引擎可优先读取 preview；桌面引擎只读取 selected。
+ * 系统确认应用后才提交 selected，确认或取消返回时均清除 preview。
  */
 val preview = stringPreferencesKey("preview")
 val selected = stringPreferencesKey("selected")
 
-fun Preferences.selectedWallPaper() =
-    (this[preview].takeIf { it?.isNotEmpty() == true }
-        ?: this[selected])
+fun Preferences.selectedWallPaper(isPreview: Boolean = false) =
+    (if (isPreview) this[preview]?.takeIf { it.isNotEmpty() } else null)
+        ?: this[selected]?.takeIf { it.isNotEmpty() }
