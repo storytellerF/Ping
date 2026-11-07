@@ -1,5 +1,29 @@
 # 开发与验证
 
+## Android 构建变体
+
+| 变体 | 包名 | 图标标识 |
+| --- | --- | --- |
+| debug | `com.storyteller_f.ping.debug` | 蓝色 DEBUG ribbon |
+| alpha | `com.storyteller_f.ping.alpha` | 橙色 ALPHA ribbon |
+| release | `com.storyteller_f.ping` | 原始图标 |
+
+使用 `./gradlew.bat :ping:assembleDebug`、`:ping:assembleAlpha` 或
+`:ping:assembleRelease` 构建；macOS/Linux 使用 `./gradlew`。
+三个包名可并存，数据和已设置的壁纸组件分别独立。
+三种构建均只打包 Purism JNI 支持的 arm64-v8a、x86_64、x86，避免其他依赖
+夹带未提供 Core 的 ABI，导致安装后无法加载原生库。
+EasyLauncher 6.4.1 为 debug、alpha 的普通及圆形启动图标生成 ribbon。
+原 WebP 启动位图无损转换为 PNG，以兼容插件的图像读取，像素保持一致。
+
+alpha 继承 release 的混淆、资源压缩和签名配置，版本名追加 `-alpha`，依赖模块
+使用 release 变体；不启用 debug 的 LeakCanary。发布签名需要
+`storyteller_f_sign_path`、`storyteller_f_sign_alias`、
+`storyteller_f_sign_store_password`、`storyteller_f_sign_key_password` 环境变量。
+本地未提供签名时，alpha/release 产物为 unsigned APK，须签名后才能安装。
+CI 的 main 分支构建 alpha，有配置密钥时签名；标签构建签名 release，缺少密钥
+则失败。CI 构建产物保存在 `ping/build/outputs/apk/` 对应变体目录。
+
 ## Purism Core Android 最小验证
 
 `tools/purism-probe` 是独立的 Android NDK 对比程序，不修改应用的 Core 后端。

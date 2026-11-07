@@ -3,6 +3,7 @@ agp = "9.1.0"
 kotlin = "2.3.20"
 ksp = "2.3.6"
 licensee = "1.14.1"
+easylauncher = "6.4.1"
 navigation = "2.9.7"
 activityKtx = "1.13.0"
 coreKtx = "1.18.0"
@@ -59,6 +60,7 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 licensee = { id = "app.cash.licensee", version.ref = "licensee" }
+easylauncher = { id = "com.starter.easylauncher", version.ref = "easylauncher" }
 navigation-safeargs-kotlin = { id = "androidx.navigation.safeargs.kotlin", version.ref = "navigation" }
 
 [bundles]

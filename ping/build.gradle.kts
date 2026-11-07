@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.ksp)
     alias(libs.plugins.navigation.safeargs.kotlin)
+    alias(libs.plugins.easylauncher)
 //    alias(libs.plugins.licensee)
 }
 android {
@@ -54,6 +55,12 @@ android {
             if (releaseSignConfig != null)
                 signingConfig = releaseSignConfig
         }
+        create("alpha") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".alpha"
+            versionNameSuffix = "-alpha"
+            matchingFallbacks += listOf("release")
+        }
     }
     val javaVersion = JavaVersion.VERSION_21
     compileOptions {
@@ -67,6 +74,18 @@ android {
     }
     providers.gradleProperty("live2dTestAssets").orNull?.let {
         sourceSets.getByName("androidTest").assets.srcDir(it)
+    }
+}
+
+easylauncher {
+    iconNames.addAll("@mipmap/ic_launcher", "@mipmap/ic_launcher_round")
+    buildTypes {
+        register("debug") {
+            filters(customRibbon(label = "DEBUG", ribbonColor = "#1565C0"))
+        }
+        register("alpha") {
+            filters(customRibbon(label = "ALPHA", ribbonColor = "#FF6D00"))
+        }
     }
 }
 

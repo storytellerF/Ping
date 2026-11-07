@@ -6,5 +6,6 @@ plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.licensee) apply false
+    alias(libs.plugins.easylauncher) apply false
     alias(libs.plugins.navigation.safeargs.kotlin) apply false
 }
