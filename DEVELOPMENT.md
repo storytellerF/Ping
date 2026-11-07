@@ -38,8 +38,11 @@ Purism Core 固定为 `1069334965522df5d0b791e97f01e26b19c45456`，使用 v5 ABI
 应用仅保留 `purism-core/libs/cubism-java-api.jar`，它来自官方 Java R5 SDK
 的 `classes.jar`，不含原生库；API 许可文本随 APK 的 assets 分发。
 该 Java 接口仍是运行所需依赖，不代表整个 SDK 均已开源。
-`cubism-framework` 模块编译子模块源码，子模块固定在与 Java API 匹配的
+`cubism-framework` 模块编译仓库内置的 Framework 源码，固定在与 Java API 匹配的
 `5-r.5`（`c2d4200`），匹配新版 Java API，并支持 Ren 所需的离屏绘制和混合模式。
+源码、shader assets 和许可位于 `cubism-framework/upstream`，版本来源及更新规则见
+[UPSTREAM.md](cubism-framework/upstream/UPSTREAM.md)。仓库不再使用 Git submodule，
+普通 clone 即包含这些文件，CI 无需递归拉取子模块；Purism 源码仍由 CMake 按固定提交获取。
 JNI 会同步离屏透明度、颜色、遮罩、部件映射及完整绘制顺序；不能只压缩顺序
 编号来让旧渲染器避开越界，否则会丢失离屏绘制语义。
 新版 Framework 的 shader assets 由模块打包，Application 提供资源加载回调。
@@ -177,7 +180,7 @@ Debug 应用、设备测试包构建及 lintDebug 已通过。APK 的 ARM64、x8
 
 此测试发现 R5 的 shader 和 offscreen manager 均为进程级单例，导致预览与桌面
 两个 EGL 上下文复用不属于自己的 GPU 对象，出现持续黑屏。`cubism-framework`
-构建任务从固定上游源文件生成按 GL 线程隔离这两个缓存的版本，保留上游子模块
+构建任务从固定上游源文件生成按 GL 线程隔离这两个缓存的版本，保留内置的上游
 源码原样；Delegate 在自己的 GL 线程释放对应缓存。修复后同时存在的桌面与预览
 均有正常画面，返回桌面及熄屏恢复正常。此阶段首次编译 shader 约需 5 秒的问题，
 已由下述按需编译改动继续优化。

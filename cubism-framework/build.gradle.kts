@@ -20,7 +20,7 @@ abstract class FrameworkSources : Sync() {
 // R5 caches GL programs and offscreen targets globally. Wallpaper preview and
 // home engines use separate GL threads/contexts, so caches must follow the owner.
 val frameworkSources by tasks.registering(FrameworkSources::class) {
-    from("../CubismJavaFramework/framework/src/main/java")
+    from("upstream/src/main/java")
     generatedDirectory.set(layout.buildDirectory.dir("generated/framework"))
     lazyShaderPatch.set(layout.projectDirectory.file("patches/LazyShaders.java.inc"))
     into(generatedDirectory)
@@ -55,7 +55,7 @@ android {
     namespace = "com.live2d.sdk.cubism.framework"
     compileSdk = 36
     defaultConfig { minSdk = 26 }
-    sourceSets.getByName("main").assets.srcDir("../CubismJavaFramework/framework/src/main/assets")
+    sourceSets.getByName("main").assets.srcDir("upstream/src/main/assets")
 }
 androidComponents.onVariants { variant ->
     variant.sources.java?.addGeneratedSourceDirectory(frameworkSources, FrameworkSources::generatedDirectory)
