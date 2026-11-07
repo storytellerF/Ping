@@ -78,6 +78,7 @@ android {
 }
 
 easylauncher {
+    // Both adaptive launcher entries share the SVG-generated leaf foreground.
     iconNames.addAll("@mipmap/ic_launcher", "@mipmap/ic_launcher_round")
     buildTypes {
         register("debug") {

@@ -14,7 +14,8 @@
 三种构建均只打包 Purism JNI 支持的 arm64-v8a、x86_64、x86，避免其他依赖
 夹带未提供 Core 的 ABI，导致安装后无法加载原生库。
 EasyLauncher 6.4.1 为 debug、alpha 的普通及圆形启动图标生成 ribbon。
-原 WebP 启动位图无损转换为 PNG，以兼容插件的图像读取，像素保持一致。
+启动图标使用浮萍/壁纸叶片设计，源文件和再生成说明见 [artwork](artwork/README.md)。
+自适应图标分离纯色背景与带波纹镂空的矢量前景，普通、圆形 PNG 覆盖五种密度。
 
 alpha 继承 release 的混淆、资源压缩和签名配置，版本名追加 `-alpha`，依赖模块
 使用 release 变体；不启用 debug 的 LeakCanary。发布签名需要
