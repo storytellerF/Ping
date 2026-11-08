@@ -36,6 +36,8 @@ internal class OESTexture {
         }
     }
 
+    fun release() = GLES20.glDeleteTextures(textures.size, textures, 0)
+
     fun bind() {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textures[0])

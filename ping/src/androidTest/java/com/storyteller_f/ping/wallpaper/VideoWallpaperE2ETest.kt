@@ -5,20 +5,14 @@ import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.media.MediaPlayer
-import android.opengl.GLSurfaceView
 import android.provider.Settings
-import android.service.wallpaper.WallpaperService
 import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.test.platform.app.InstrumentationRegistry
 import com.storyteller_f.ping.pagerDataStore
 import com.storyteller_f.ping.preview
 import com.storyteller_f.ping.selected
-import com.storyteller_f.ping.shader.OutputHandoff
-import com.storyteller_f.ping.shader.VideoOutput
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -31,61 +25,36 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 
-/**
- * 真实系统壁纸测试：会替换当前壁纸，仅在专用测试设备上显式启用。
- * 使用 am instrument --no-hidden-api-checks -e videoWallpaperE2E true，
- * 反射只用于观察 framework 管理的 Engine 及应用私有状态，不向生产代码添加测试入口。
- */
+/** 会替换系统壁纸，只在专用设备上显式启用；应用内部通过 Debug 只读快照观察。 */
 class VideoWallpaperE2ETest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
     private val ui = instrumentation.uiAutomation
     private val manager = WallpaperManager.getInstance(context)
-    private val directory = File(context.filesDir, "video-wallpaper-e2e")
-    private var enabled = false
-    private var previousSelected: String? = null
-    private var previousPreview: String? = null
-    private var previousComponent: ComponentName? = null
+    private val component = ComponentName(context, PingPagerService::class.java)
+    private lateinit var directory: File
+    private var environment: WallpaperTestEnvironment? = null
 
-    // instrumentation 测试以同步入口连接 suspend 操作，主 Looper 始终可以处理服务和播放器回调。
     @Before fun prepare() = runBlocking<Unit> {
         assumeTrue(InstrumentationRegistry.getArguments().getString("videoWallpaperE2E") == "true")
-        previousComponent = manager.wallpaperInfo?.component
-        val preferences = context.pagerDataStore.data.first()
-        previousSelected = preferences[selected]
-        previousPreview = preferences[preview]
-        enabled = true
-        directory.mkdirs()
+        environment = WallpaperTestEnvironment.capture(context, manager, ::setComponent)
+        directory = File(context.cacheDir, "video-wallpaper-e2e-${System.nanoTime()}").apply { mkdirs() }
         listOf("red", "blue", "green").forEach { name ->
             instrumentation.context.assets.open("video-wallpaper/$name.mp4").use { input ->
                 File(directory, "$name.mp4").outputStream().use { input.copyTo(it) }
             }
         }
         select("red")
-        setComponent(ComponentName(context, PingPagerService::class.java))
+        setComponent(component)
         home()
-        await("initial engine and player") { engine()?.let { it.isVisible && player(it)?.isPlaying == true } == true }
+        await("initial playback") { engine()?.snapshot()?.playerState == "playing" }
         awaitColor(Color.RED)
-        Log.i("VideoWallpaperE2E", "Initial real wallpaper ready")
     }
 
     @After fun restore() = runBlocking<Unit> {
-        if (!enabled) return@runBlocking
-        val stopping = onMain { engine() }
-        val stoppingThread = onMain { stopping?.let { field(view(it), "mGLThread") as Thread } }
-        try {
-            setComponent(previousComponent?.takeUnless { it.className == PingPagerService::class.java.name }
-                ?: ComponentName("com.android.systemui", "com.android.systemui.wallpapers.ImageWallpaper"))
-            await("video engines and GL cleanup finished") {
-                engine() == null && stoppingThread?.isAlive != true &&
-                    (stopping == null || (field(stopping, "engineJob") as Job).isCancelled)
-            }
-        } finally {
-            context.pagerDataStore.edit {
-                previousSelected?.let { value -> it[selected] = value } ?: it.remove(selected)
-                previousPreview?.let { value -> it[preview] = value } ?: it.remove(preview)
-            }
-            directory.deleteRecursively()
+        val environment = environment ?: return@runBlocking
+        try { environment.restore() } finally {
+            if (::directory.isInitialized) directory.deleteRecursively()
         }
     }
 
@@ -93,57 +62,80 @@ class VideoWallpaperE2ETest {
         val original = onMain { checkNotNull(engine()) }
         for ((name, color) in listOf("blue" to Color.BLUE, "green" to Color.GREEN, "red" to Color.RED,
             "blue" to Color.BLUE, "red" to Color.RED)) {
-            val previous = onMain { checkNotNull(player(original)) }
+            val previous = onMain { original.snapshot() }
             select(name)
-            await("replacement player for $name") { player(original)?.let { it !== previous && it.isPlaying } == true }
+            await("replacement for $name") { original.snapshot().let { it.sourceId > previous.sourceId && it.playerState == "playing" } }
             awaitColor(color)
             assertMoving(name)
             onMain {
                 assertSame(original, engine())
-                assertThrows(IllegalStateException::class.java) { previous.isPlaying }
+                val state = original.snapshot()
+                assertEquals(state.playersCreated - 1, state.playersReleased)
+                assertEquals(state.sourceId, state.renderer.displayedSource)
             }
         }
         evidence("video-switching")
     }
 
+    @Test fun failedReplacementKeepsLastFrameAndCropUntilAnotherVideoSucceeds() = runBlocking<Unit> {
+        val original = onMain { checkNotNull(engine()) }
+        val previous = onMain { original.snapshot() }
+        // 文件不存在，准备过程不会产生新尺寸或首帧，保留画面必须仍使用旧裁剪。
+        select("missing")
+        await("failed candidate retains displayed source") { original.snapshot().let {
+            it.sourceId > previous.sourceId && it.playerState == "stopped" && it.renderer.pendingSource == it.sourceId
+        } }
+        // 生命周期快照先于 SurfaceFlinger 最后一次合成；等待提交稳定，再验证旧帧不动。
+        withTimeout(5000) {
+            var previousFrame = checkNotNull(ui.takeScreenshot())
+            try {
+                while (true) {
+                    delay(250)
+                    val next = checkNotNull(ui.takeScreenshot())
+                    val difference = pixelDifferences(previousFrame, next)
+                    previousFrame.recycle()
+                    previousFrame = next
+                    if (difference == 0) break
+                }
+            } finally { previousFrame.recycle() }
+        }
+        awaitColor(Color.RED)
+        onMain { assertEquals(previous.sourceId, original.snapshot().renderer.displayedSource) }
+        select("green")
+        await("recovery playback") { original.snapshot().playerState == "playing" }
+        awaitColor(Color.GREEN)
+        assertMoving("recovered-after-failed-selection")
+    }
+
     @Test fun hidingPausesAndReturningResumesSamePlayer() = runBlocking<Unit> {
         val original = onMain { checkNotNull(engine()) }
-        val originalPlayer = onMain { checkNotNull(player(original)) }
+        val created = onMain { original.snapshot().playersCreated }
         repeat(3) {
             hide()
-            await("hidden and paused") { !original.isVisible && !originalPlayer.isPlaying }
-            val position = onMain { originalPlayer.currentPosition }
+            await("hidden and paused") { original.snapshot().let { !it.visible && it.playerState == "paused" } }
+            val position = onMain { original.snapshot().positionMs }
             delay(450)
-            onMain { assertEquals("Hidden playback must not advance", position, originalPlayer.currentPosition) }
+            onMain { assertEquals(position, original.snapshot().positionMs) }
             home()
-            await("visible and playing") { original.isVisible && originalPlayer.isPlaying }
-            onMain { assertSame(original, engine()); assertSame(originalPlayer, player(original)) }
+            await("resumed") { original.snapshot().let { it.visible && it.playerState == "playing" } }
+            onMain { assertSame(original, engine()); assertEquals(created, original.snapshot().playersCreated) }
             assertMoving("resume-$it")
         }
         evidence("hidden-resumed")
     }
 
-    @Test fun destroyingEngineReleasesPlayerSurfaceAndGlThreadThenCanReapply() = runBlocking<Unit> {
+    @Test fun destroyingEngineReleasesResourcesThenCanReapply() = runBlocking<Unit> {
         val original = onMain { checkNotNull(engine()) }
-        val originalPlayer = onMain { checkNotNull(player(original)) }
-        val output = onMain { checkNotNull(output(original)) }
-        val glThread = onMain { field(view(original), "mGLThread") as Thread }
-        setComponent(ComponentName("com.android.systemui", "com.android.systemui.wallpapers.ImageWallpaper"))
-        await("engine destruction and GL cleanup") { (field(original, "engineJob") as Job).isCancelled && !glThread.isAlive }
-        onMain {
-            assertNull(field(original, "playback"))
-            assertNull(output(original))
-            assertFalse(output.isValid)
-            assertFalse(output.surface.isValid)
-            assertFalse("GL thread must exit", glThread.isAlive)
-            assertThrows(IllegalStateException::class.java) { originalPlayer.isPlaying }
-        }
+        val output = onMain { checkNotNull(original.output()) }
+        WallpaperTestEnvironment.stopVideo(::setComponent)
+        assertClosed(original)
+        onMain { assertTrue(output.snapshot().surfaceReleased) }
         select("blue")
         delay(300)
-        onMain { assertNull("Destroyed engine must not observe a new selection", field(original, "playback")) }
-        setComponent(ComponentName(context, PingPagerService::class.java))
+        assertClosed(original)
+        setComponent(component)
         home()
-        await("new engine") { engine()?.let { it !== original && player(it)?.isPlaying == true } == true }
+        await("new engine") { engine()?.let { it !== original && it.snapshot().playerState == "playing" } == true }
         awaitColor(Color.BLUE)
         assertMoving("reapplied")
         evidence("engine-reapplied")
@@ -152,119 +144,107 @@ class VideoWallpaperE2ETest {
     @Test fun destroyingPausedEngineReleasesRetiredQueueWithoutCurrentContext() = runBlocking<Unit> {
         val original = onMain { checkNotNull(engine()) }
         val previous = onMain {
-            view(original).preserveEGLContextOnPause = false
-            checkNotNull(output(original))
+            original.preserveContextOnPause(false)
+            checkNotNull(original.output())
         }
-        val glThread = onMain { field(view(original), "mGLThread") as Thread }
         hide()
-        await("paused with a retired queue") { !original.isVisible && !previous.isValid }
-        onMain { assertTrue(previous.surface.isValid) }
-        setComponent(ComponentName("com.android.systemui", "com.android.systemui.wallpapers.ImageWallpaper"))
-        await("paused engine and GL thread terminated") {
-            (field(original, "engineJob") as Job).isCancelled && !glThread.isAlive
-        }
-        onMain {
-            assertNull(field(original, "playback"))
-            assertNull(output(original))
-            assertFalse(previous.surface.isValid)
-            assertTrue(previous.canRelease)
-            val renderer = checkNotNull(field(original, "renderer"))
-            assertTrue("All retired SurfaceTextures must be released", (field(renderer, "retiredBindings") as List<*>).isEmpty())
-        }
+        await("context retired") { !original.snapshot().renderer.hasContext && !previous.snapshot().valid }
+        onMain { assertFalse(previous.snapshot().surfaceReleased) }
+        WallpaperTestEnvironment.stopVideo(::setComponent)
+        assertClosed(original)
+        onMain { assertTrue(previous.snapshot().surfaceReleased) }
         home()
     }
 
     @Test fun eglContextRecreationRebindsLiveDecoderAndResumesFrames() = runBlocking<Unit> {
         val original = onMain { checkNotNull(engine()) }
-        val originalPlayer = onMain { checkNotNull(player(original)) }
+        val created = onMain { original.snapshot().playersCreated }
         repeat(3) {
+            val before = onMain { original.snapshot().renderer.contextId }
             val previous = onMain {
-                view(original).preserveEGLContextOnPause = false
-                checkNotNull(output(original))
+                original.preserveContextOnPause(false)
+                checkNotNull(original.output())
             }
-            Log.i("VideoWallpaperE2E", "Forcing context destruction: $it")
             hide()
-            await("context destroyed and old output retired") { !original.isVisible && !previous.isValid }
-            onMain { assertTrue("Keep the old queue alive until the decoder switches surfaces", previous.surface.isValid) }
-            Log.i("VideoWallpaperE2E", "Old context destroyed: $it")
+            await("old context retired") { !original.snapshot().renderer.hasContext && !previous.snapshot().valid }
+            onMain { assertFalse(previous.snapshot().surfaceReleased) }
             home()
-            await("new context output attached") {
-                output(original)?.let { it !== previous && it.isValid && originalPlayer.isPlaying } == true
-            }
+            await("new output and resumed playback") { original.snapshot().let {
+                it.renderer.contextId > before && it.playerState == "playing" && it.output?.valid == true
+            } }
             onMain {
                 assertSame(original, engine())
-                assertSame("Context replacement must retain the live decoder", originalPlayer, player(original))
-                assertFalse("Release the old Surface after replacement", previous.surface.isValid)
-                assertTrue(previous.canRelease)
+                assertEquals(created, original.snapshot().playersCreated)
+                assertTrue(previous.snapshot().surfaceReleased)
             }
-            Log.i("VideoWallpaperE2E", "New context attached: $it")
             awaitColor(Color.RED)
             assertMoving("context-$it")
         }
         evidence("egl-recreated")
     }
 
-    private suspend fun select(name: String) {
-        context.pagerDataStore.edit {
-            it[selected] = File(directory, "$name.mp4").path
-            it.remove(preview)
-        }
+    @Test fun environmentRestoresPreviouslyActiveVideoAndSelection() = runBlocking<Unit> {
+        select("blue")
+        awaitColor(Color.BLUE)
+        val saved = WallpaperTestEnvironment.capture(context, manager, ::setComponent)
+        try {
+            select("green")
+            awaitColor(Color.GREEN)
+        } finally { saved.restore() }
+        home()
+        assertEquals(component, manager.wallpaperInfo?.component)
+        assertEquals(File(directory, "blue.mp4").path, context.pagerDataStore.data.first()[selected])
+        await("restored original video") { engine()?.snapshot()?.playerState == "playing" }
+        awaitColor(Color.BLUE)
+        assertMoving("restored-original-video")
     }
 
+    @Test fun environmentRestoresPreviouslyStaticWallpaper() = runBlocking<Unit> {
+        WallpaperTestEnvironment.stopVideo(::setComponent)
+        val originalComponent = manager.wallpaperInfo?.component
+        val saved = WallpaperTestEnvironment.capture(context, manager, ::setComponent)
+        try {
+            setComponent(component)
+            home()
+            awaitColor(Color.RED)
+        } finally { saved.restore() }
+        assertEquals(originalComponent, manager.wallpaperInfo?.component)
+        onMain { assertNull(engine()) }
+    }
+
+    private suspend fun assertClosed(engine: VideoWallpaperDebug.Engine) = onMain {
+        val state = engine.snapshot()
+        assertTrue(state.destroyed)
+        assertTrue(state.glStopped)
+        assertFalse(state.observing)
+        assertEquals(state.playersCreated, state.playersReleased)
+        assertEquals("stopped", state.playerState)
+        assertNull(state.output)
+        assertEquals(0, state.renderer.retiredOutputs)
+    }
+
+    private suspend fun select(name: String) {
+        context.pagerDataStore.edit { it[selected] = File(directory, "$name.mp4").path; it.remove(preview) }
+    }
+
+    // 唯一的 framework 反射边界：系统壁纸激活 API。内部观察不读取 framework 私有字段。
     private fun setComponent(component: ComponentName) {
         ui.adoptShellPermissionIdentity()
         try {
             assertEquals(true, manager.javaClass.getMethod("setWallpaperComponent", ComponentName::class.java).invoke(manager, component))
-        } finally {
-            ui.dropShellPermissionIdentity()
-        }
+        } finally { ui.dropShellPermissionIdentity() }
     }
-
     private fun home() = context.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     private fun hide() = context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-
+    private fun engine() = VideoWallpaperDebug.engines.singleOrNull { !it.snapshot().isPreview }
     private suspend fun <T> onMain(block: () -> T): T = withContext(Dispatchers.Main) { block() }
     private suspend fun await(description: String, condition: () -> Boolean) {
-        try {
-            withTimeout(15000) { while (!onMain(condition)) delay(30) }
-        } catch (failure: Exception) {
-            Log.e("VideoWallpaperE2E", "Failed waiting for: $description", failure)
-            throw failure
-        }
+        try { withTimeout(15000) { while (!onMain(condition)) delay(30) } }
+        catch (failure: Exception) { Log.e("VideoWallpaperE2E", "Failed waiting for: $description", failure); throw failure }
     }
-
-    private fun field(instance: Any, name: String): Any? {
-        val type = generateSequence(instance.javaClass as Class<*>?) { it.superclass }
-            .first { candidate -> candidate.declaredFields.any { it.name == name } }
-        return type.getDeclaredField(name).apply { isAccessible = true }.get(instance)
-    }
-
-    private fun engine(): WallpaperService.Engine? {
-        val activityThread = Class.forName("android.app.ActivityThread")
-        val thread = activityThread.getDeclaredMethod("currentActivityThread").invoke(null)
-        val services = field(thread, "mServices") as Map<*, *>
-        val service = services.values.filterIsInstance<PingPagerService>().singleOrNull() ?: return null
-        val engines = field(service, "mActiveEngines")
-        val active = when (engines) {
-            is Map<*, *> -> engines.values
-            is Collection<*> -> engines
-            else -> error("Unsupported framework engine collection")
-        }
-        return active.mapNotNull { item ->
-            if (item is WallpaperService.Engine) item else item?.let { field(it, "mEngine") as? WallpaperService.Engine }
-        }.singleOrNull { !it.isPreview }
-    }
-
-    private fun player(engine: WallpaperService.Engine): MediaPlayer? =
-        field(engine, "playback")?.let { field(it, "player") as MediaPlayer }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun output(engine: WallpaperService.Engine): VideoOutput? =
-        (field(engine, "outputs") as OutputHandoff<VideoOutput>).current
-
-    private fun view(engine: WallpaperService.Engine): GLSurfaceView =
-        (field(engine, "surfaceView" + "$" + "delegate") as Lazy<*>).value as GLSurfaceView
-
+    private fun pixelDifferences(first: Bitmap, next: Bitmap) = (10..90 step 2).sumOf { x -> (30..70 step 2).count { y ->
+        first.getPixel(first.width * x / 100, first.height * y / 100) != next.getPixel(next.width * x / 100, next.height * y / 100)
+    } }
     private suspend fun awaitColor(color: Int) {
         try {
             withTimeout(15000) {
@@ -285,7 +265,7 @@ class VideoWallpaperE2ETest {
             evidence("color-timeout")
             onMain {
                 val current = engine()
-                Log.e("VideoWallpaperE2E", "Color timeout: visible=${current?.isVisible} playing=${current?.let { player(it)?.isPlaying }} position=${current?.let { player(it)?.currentPosition }}")
+                Log.e("VideoWallpaperE2E", "Color timeout: visible=${current?.snapshot()?.visible} state=${current?.snapshot()?.playerState} position=${current?.snapshot()?.positionMs}")
             }
             throw failure
         }
@@ -298,10 +278,7 @@ class VideoWallpaperE2ETest {
                 while (true) {
                     delay(150)
                     val next = checkNotNull(ui.takeScreenshot())
-                    val differences = (10..90 step 2).sumOf { x -> (30..70 step 2).count { y ->
-                        first.getPixel(first.width * x / 100, first.height * y / 100) !=
-                            next.getPixel(next.width * x / 100, next.height * y / 100)
-                    } }
+                    val differences = pixelDifferences(first, next)
                     next.recycle()
                     if (differences > 30) break
                 }

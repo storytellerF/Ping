@@ -72,6 +72,9 @@ android {
         viewBinding = true
         dataBinding = true
     }
+    listOf("release", "alpha").forEach { name ->
+        sourceSets.getByName(name).kotlin.srcDir("src/nonDebug/kotlin")
+    }
     providers.gradleProperty("live2dTestAssets").orNull?.let {
         sourceSets.getByName("androidTest").assets.srcDir(it)
     }

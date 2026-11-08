@@ -284,10 +284,16 @@ DataStore 选择、MediaPlayer 解码、SurfaceTexture 和 EGL 绘制链路验�
 断言包括桌面颜色、中心区域跨帧像素变化、播放器对象及进度、Surface 释放和 GL 线程退出。
 
 测试会替换设备当前壁纸，因此默认跳过，须在独占的专用测试设备上显式启用。
-它会恢复原壁纸组件及选择参数，并删除自己的应用内测试文件。静态壁纸恢复路径
+恢复先停用测试壁纸并等待 GL 清理，再恢复选择参数，最后重新应用原组件，
+包括测试前已经启用 Ping 视频壁纸的情况。测试文件使用独立的临时目录，恢复完成
+后仅删除本轮创建的目录。静态壁纸恢复路径
 面向系统使用 `com.android.systemui.wallpapers.ImageWallpaper` 的 Android 测试镜像。
-测试以反射观察 framework 的活动 Engine 和应用状态，需要仅对本次 instrumentation
-进程启用 `--no-hidden-api-checks`；不修改系统全局 hidden API 设置或生产应用权限。
+测试通过 Debug 构建的只读生命周期快照观察 Engine、播放器及输出状态，不再反射
+framework 的活动 Engine 容器、私有 GL 线程字段或 Kotlin 委托字段。context 保留策略
+通过独立的 Debug 控制入口设置；Release/Alpha 共用 `src/nonDebug/kotlin` 的空实现，
+不保留诊断对象或测试控制。唯一的 framework 反射边界是系统壁纸激活 API，仍需仅对
+本次 instrumentation 进程启用 `--no-hidden-api-checks`；不修改全局 hidden API 设置或
+生产应用权限。
 
 先构建并安装原项目的两个 Debug APK，以下为 PowerShell 命令；替换 `DEVICE_SERIAL`：
 
@@ -304,7 +310,7 @@ adb -s DEVICE_SERIAL shell am instrument --no-hidden-api-checks -w -r `
 测试截图保存在目标应用外部文件目录中，名称为 `video-switching.png`、
 `hidden-resumed.png`、`engine-reapplied.png` 和 `egl-recreated.png`。
 可通过 `adb pull /sdcard/Android/data/com.storyteller_f.ping.debug/files/ 本地输出目录`
-取得。`am instrument` 的进程退出码不能单独证明通过，须检查 `OK (7 tests)`
+取得。`am instrument` 的进程退出码不能单独证明通过，须检查 `OK (11 tests)`
 及每个用例的状态；发生颜色超时时另存 `color-timeout.png`。
 
 合成视频位于 `ping/src/androidTest/assets/video-wallpaper`。需要重新生成时，使用
@@ -324,7 +330,7 @@ ffmpeg -y -f lavfi -i "color=c=red:s=640x360:r=15:d=4" `
 ### 2026-11-08 验证结果
 
 原项目 Debug APK 在 Android 16 / API 36.1、x86_64 模拟器上完成以下验证，
-5 项系统壁纸测试及 2 项 ES2/ES3 渲染器测试全部通过：
+8 项系统壁纸测试及 3 项 GPU 测试全部通过：
 
 | 场景 | 实际断言 |
 | --- | --- |
@@ -333,6 +339,9 @@ ffmpeg -y -f lavfi -i "color=c=red:s=640x360:r=15:d=4" `
 | Engine 销毁 | 改用系统静态壁纸，验证播放器、Surface、GL 线程和订阅释放；修改选择不会唤醒旧 Engine，重新应用能播放新视频 |
 | EGL context 重建 | 3 轮关闭 context 保留后通过实际可见性回调触发 pause/resume；旧输出失效，新输出绑定，同一播放器恢复动态画面 |
 | 已暂停时销毁 | context 已销毁且旧生产队列仍待替换时，Engine 退出仍能释放 SurfaceTexture 并结束 GL 线程 |
+| 无首帧的候选视频 | GPU 逐像素验证缺失尺寸、新尺寸已到但首帧未到、旧来源晚到回调均不改变旧图像与裁剪；候选首帧到达后才切换 |
+| 准备失败及恢复 | 真实文件准备失败时保留旧画面；随后选择有效视频能继续播放，并释放被替换输出 |
+| 环境恢复 | 分别验证原静态壁纸和原 Ping 视频壁纸组件、选择参数与动态画面得到恢复 |
 
 本轮复现了旧实现的 context 恢复持续黑屏：先释放 SurfaceTexture 会废弃解码器仍在
 使用的 BufferQueue；改为先解绑到 null 后，暂停中的视频解码器仍可能不能恢复产帧。
@@ -340,7 +349,14 @@ ffmpeg -y -f lavfi -i "color=c=red:s=640x360:r=15:d=4" `
 `OutputLease` 原子协调取得、撤销和归还生产者所有权，防止交接与 context 销毁之间的竞争。
 Engine 关闭先断开生产者，GL 清理事件完成后才退出线程，覆盖已经没有当前 context 的状态。
 
-17 项原项目 JVM 单元测试通过；Debug 应用及测试包构建、`lintDebug` 通过，
+帧状态按视频来源独立持有，区分等待首帧与已有画面；每次选择新视频都有独立输出，
+避免新尺寸重新解释旧来源的纹理。新帧接替前，保留图像仍以其自身尺寸计算裁剪。
+同一 EGL context 内不再显示的旧纹理显式删除；旧 context 的句柄不带入新 context。
+`OutputSession` 统一取得、绑定、替换及归还输出，平台适配器内部完成 Surface 释放、
+生产者所有权归还及 GL 清理通知。绑定失败先停止可能已连接的生产者，再归还候选。
+
+20 项原项目 JVM 单元测试通过，包含输出替换顺序、来源失效、晚到通知及失败清理；
+Debug 应用/测试包构建、Release/Alpha Kotlin 编译及 `lintDebug` 通过，
 Lint 为 0 错误、36 项警告。本轮不代表真机硬件解码器、GPU 驱动异常重置、其他视频
 编码/旋转元数据或应用导入与系统确认按钮流程均已覆盖；context 测试通过关闭
 `preserveEGLContextOnPause` 确定性触发真实 EGL 销毁及重建，没有模拟 GPU 驱动故障。
