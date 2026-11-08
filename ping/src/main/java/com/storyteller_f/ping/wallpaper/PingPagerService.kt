@@ -10,9 +10,10 @@ import android.media.MediaPlayer
 import android.opengl.GLSurfaceView
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.service.wallpaper.WallpaperService
 import android.util.Log
-import android.util.Size
 import android.view.SurfaceHolder
 import androidx.core.content.ContextCompat
 import com.storyteller_f.ping.pagerDataStore
@@ -21,7 +22,10 @@ import com.storyteller_f.ping.shader.GLES20WallpaperRenderer
 import com.storyteller_f.ping.shader.GLES30WallpaperRenderer
 import com.storyteller_f.ping.shader.GLWallpaperRenderer
 import com.storyteller_f.ping.shader.Offset
+import com.storyteller_f.ping.shader.OutputHandoff
+import com.storyteller_f.ping.shader.VideoOutput
 import com.storyteller_f.ping.shader.VideoMatrix
+import com.storyteller_f.ping.shader.WallpaperContextFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,15 +35,9 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.coroutines.CoroutineContext
 
 class PingPagerService : WallpaperService() {
-    val job = Job()
-    val scope = object : CoroutineScope {
-        override val coroutineContext: CoroutineContext
-            get() = job + Dispatchers.Main
-
-    }
+    private val job = Job()
 
     override fun onUnbind(intent: Intent?): Boolean {
         Log.d(TAG, "onUnbind() called with: intent = $intent")
@@ -59,16 +57,24 @@ class PingPagerService : WallpaperService() {
 
     private inner class PingEngine(inContext: Context) : WallpaperService.Engine() {
         private var currentThumbnail: Bitmap? = null
-        private val player: MediaPlayer = MediaPlayer().apply {
-            isLooping = true
-            setOnVideoSizeChangedListener { player, width, height ->
-                renderer.binding.setVideoMatrix(VideoMatrix(width, height, 0), player)
-            }
-            setOnPreparedListener {
-                Log.i(TAG, "OnPreparedListener")
-                it.start()
-            }
-        }
+        private val engineJob = Job(job)
+        private val engineScope = CoroutineScope(engineJob + Dispatchers.Main)
+        private val mainHandler = Handler(Looper.getMainLooper())
+        private var destroyed = false
+        private var visible = false
+        private var playback: Playback? = null
+        private val outputs = OutputHandoff<VideoOutput>(
+            acquire = { it.acquire() },
+            attach = { output ->
+                playback?.player?.setSurface(output?.surface)
+                updatePlayback(output != null)
+            },
+            release = {
+                it.surface.release()
+                it.detach()
+                surfaceView.queueEvent { renderer.releaseRetiredOutputs() }
+            },
+        )
         private val renderer: GLWallpaperRenderer = run {
             val systemService =
                 ContextCompat.getSystemService(inContext, ActivityManager::class.java)
@@ -91,19 +97,38 @@ class PingPagerService : WallpaperService() {
             GLPingSurfaceView(inContext).apply {
                 setEGLContextClientVersion(renderer.version)
                 preserveEGLContextOnPause = true
+                setEGLContextFactory(WallpaperContextFactory(renderer))
+                renderer.requestRender = { requestRender() }
+                renderer.onOutputCreated = { output -> mainHandler.post { outputs.offer(output) } }
+                renderer.onOutputDestroyed = { output ->
+                    mainHandler.post {
+                        // 保留旧生产队列到新 Surface 直接替换它；先 setSurface(null) 会拆除
+                        // 已暂停的视频解码器，部分实现随后虽报告 playing，却不再产出帧。
+                        if (outputs.current === output) updatePlayback(false)
+                    }
+                }
                 setRenderer(renderer)
+                renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
             }
         }
 
         inner class GLPingSurfaceView(context: Context) : GLSurfaceView(context) {
             override fun getHolder(): SurfaceHolder = surfaceHolder
-            fun destroy() = super.onDetachedFromWindow()
+            fun destroy() {
+                // queueEvent 在暂停时仍会执行；先清理再退出，避免退出标志抢先丢弃清理事件。
+                queueEvent {
+                    renderer.onRendererStopped()
+                    mainHandler.post { detachAfterCleanup() }
+                }
+            }
+
+            private fun detachAfterCleanup() = super.onDetachedFromWindow()
         }
 
         val data = inContext.pagerDataStore.data
 
         private fun observeLatestUri() {
-            scope.launch {
+            engineScope.launch {
                 data.mapNotNull { preferences ->
                     // No type safety.
                     preferences.selectedWallPaper(isPreview)
@@ -120,12 +145,64 @@ class PingPagerService : WallpaperService() {
                         }
                         notifyColorsChanged()
                     }
-                    player.run {
-                        stop()
-                        setDataSource(it)
-                        prepareAsync()
-                    }
+                    replacePlayer(it)
                 }
+            }
+        }
+
+        // MediaPlayer 的构造、回调和所有操作均在主 Looper 上。
+        private fun replacePlayer(path: String) {
+            releasePlayer()
+            renderer.setVideoMatrix(null)
+            val player = MediaPlayer()
+            playback = Playback.Preparing(player)
+            player.isLooping = true
+            player.setOnVideoSizeChangedListener { source, width, height ->
+                if (!destroyed && playback?.player === source) {
+                    renderer.setVideoMatrix(VideoMatrix(width, height, 0))
+                }
+            }
+            player.setOnPreparedListener { source ->
+                if (!destroyed && playback?.player === source) {
+                    playback = Playback.Ready(source)
+                    updatePlayback()
+                }
+            }
+            player.setOnErrorListener { source, what, extra ->
+                if (!destroyed && playback?.player === source) {
+                    Log.e(TAG, "Wallpaper playback failed: what=$what extra=$extra")
+                    releasePlayer()
+                }
+                true
+            }
+            try {
+                player.setSurface(outputs.current?.takeIf { it.isValid }?.surface)
+                player.setDataSource(path)
+                player.prepareAsync()
+            } catch (failure: Exception) {
+                releasePlayer()
+                Log.e(TAG, "Unable to prepare wallpaper video", failure)
+            }
+        }
+
+        private fun updatePlayback(hasOutput: Boolean = outputs.current?.isValid == true) {
+            val ready = playback as? Playback.Ready ?: return
+            if (visible && hasOutput) {
+                if (!ready.player.isPlaying) ready.player.start()
+            } else if (ready.player.isPlaying) {
+                ready.player.pause()
+            }
+        }
+
+        private fun releasePlayer() {
+            val previous = playback ?: return
+            playback = null
+            previous.player.run {
+                setOnPreparedListener(null)
+                setOnVideoSizeChangedListener(null)
+                setOnErrorListener(null)
+                setSurface(null)
+                release()
             }
         }
 
@@ -149,18 +226,19 @@ class PingPagerService : WallpaperService() {
         override fun onDestroy() {
             Log.d(TAG, "onDestroy() called")
             super.onDestroy()
-            player.release()
+            destroyed = true
+            engineJob.cancel()
+            outputs.close()
+            releasePlayer()
+            // 先断开生产者；GL 线程完成清理后再退出并销毁 context。
             surfaceView.destroy()
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            val playing = player.isPlaying
-            Log.d(TAG, "onVisibilityChanged() called with: visible = $visible $playing")
-            if (visible) {
-                if (!playing) player.start()
-            } else {
-                if (playing) player.pause()
-            }
+            this.visible = visible
+            if (visible) surfaceView.onResume()
+            updatePlayback()
+            if (!visible) surfaceView.onPause()
             super.onVisibilityChanged(visible)
         }
 
@@ -183,7 +261,7 @@ class PingPagerService : WallpaperService() {
             super.onOffsetsChanged(
                 xOffset, yOffset, xOffsetStep, yOffsetStep, xPixelOffset, yPixelOffset
             )
-            renderer.binding.setOffset(Offset(xOffset, yOffset))
+            renderer.setOffset(Offset(xOffset, yOffset))
         }
 
         override fun onSurfaceChanged(
@@ -194,7 +272,6 @@ class PingPagerService : WallpaperService() {
                 "onSurfaceChanged() called with: holder = $holder, format = $format, width = $width, height = $height"
             )
             super.onSurfaceChanged(holder, format, width, height)
-            renderer.binding.setScreenSize(Size(width, height))
         }
 
         override fun onSurfaceRedrawNeeded(holder: SurfaceHolder?) {
@@ -205,10 +282,6 @@ class PingPagerService : WallpaperService() {
         override fun onSurfaceCreated(holder: SurfaceHolder?) {
             Log.d(TAG, "onSurfaceCreated() called with: holder = $holder")
             super.onSurfaceCreated(holder)
-            holder ?: return
-            val width = holder.surfaceFrame?.width() ?: return
-            val height = holder.surfaceFrame.height()
-            renderer.binding.setScreenSize(Size(width, height))
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder?) {
@@ -225,6 +298,12 @@ class PingPagerService : WallpaperService() {
         } else {
             null
         }
+    }
+
+    private sealed interface Playback {
+        val player: MediaPlayer
+        data class Preparing(override val player: MediaPlayer) : Playback
+        data class Ready(override val player: MediaPlayer) : Playback
     }
 
     companion object {

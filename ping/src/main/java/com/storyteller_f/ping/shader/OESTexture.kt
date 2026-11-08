@@ -5,17 +5,18 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES20
 
 /**
- * 外部 OES 纹理的封装。
+ * 外部 OES 纹理的封装；仅在持有当前 EGL context 的 GL 线程构造和使用。
+ * 纹理句柄与 context 同寿命，由 EGLContextFactory 销毁 context 时释放。
  *
  * 背景：
  * - `SurfaceTexture` 将视频帧写入到一个外部纹理目标 `GL_TEXTURE_EXTERNAL_OES`。
  * - 采样 OES 纹理需要在片元着色器使用 `samplerExternalOES`，且必须使用 `GL_CLAMP_TO_EDGE` 避免边缘出血。
  */
-class OESTexture {
+internal class OESTexture {
     /**
      * 设置外部纹理。
      */
-    private val textures: IntArray by lazy {
+    private val textures: IntArray = run {
         IntArray(1).apply { // 仅需一个外部纹理
             //生成之后会存储到数组中
             GLES20.glGenTextures(size, this, 0) // 生成纹理 id
@@ -35,9 +36,12 @@ class OESTexture {
         }
     }
 
-    /**
-     * 生成并返回与外部纹理绑定的 `SurfaceTexture`，播放器将向该纹理写入最新视频帧。
-     */
+    fun bind() {
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textures[0])
+    }
+
+    /** 由调用方在 GL 线程释放返回的 SurfaceTexture。 */
     fun build(): SurfaceTexture {
         return SurfaceTexture(textures[0]) // 使用该纹理 id 创建 SurfaceTexture
     }
