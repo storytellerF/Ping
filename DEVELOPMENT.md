@@ -286,7 +286,10 @@ DataStore 选择、MediaPlayer 解码、SurfaceTexture 和 EGL 绘制链路验�
 测试会替换设备当前壁纸，因此默认跳过，须在独占的专用测试设备上显式启用。
 恢复先停用测试壁纸并等待 GL 清理，再恢复选择参数，最后重新应用原组件，
 包括测试前已经启用 Ping 视频壁纸的情况。测试文件使用独立的临时目录，恢复完成
-后仅删除本轮创建的目录。静态壁纸恢复路径
+后仅删除本轮创建的目录。清理超时或某一步恢复失败时，仍继续执行其余恢复步骤，
+最后重新抛出第一次异常，并按顺序附加后续异常。父协程取消期间也会完成有界恢复，
+每步挂起等待最多 15 秒；选择参数未恢复成功时保留测试媒体，避免留下悬空路径。
+静态壁纸恢复路径
 面向系统使用 `com.android.systemui.wallpapers.ImageWallpaper` 的 Android 测试镜像。
 测试通过 Debug 构建的只读生命周期快照观察 Engine、播放器及输出状态，不再反射
 framework 的活动 Engine 容器、私有 GL 线程字段或 Kotlin 委托字段。context 保留策略
@@ -303,14 +306,14 @@ adb -s DEVICE_SERIAL install -r ping/build/outputs/apk/debug/ping-debug.apk
 adb -s DEVICE_SERIAL install -r ping/build/outputs/apk/androidTest/debug/ping-debug-androidTest.apk
 adb -s DEVICE_SERIAL shell am instrument --no-hidden-api-checks -w -r `
   -e videoWallpaperE2E true `
-  -e class "com.storyteller_f.ping.wallpaper.VideoWallpaperE2ETest,com.storyteller_f.ping.shader.WallpaperRendererTest" `
+  -e class "com.storyteller_f.ping.wallpaper.WallpaperTestEnvironmentTest,com.storyteller_f.ping.wallpaper.VideoWallpaperE2ETest,com.storyteller_f.ping.shader.WallpaperRendererTest" `
   com.storyteller_f.ping.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 测试截图保存在目标应用外部文件目录中，名称为 `video-switching.png`、
 `hidden-resumed.png`、`engine-reapplied.png` 和 `egl-recreated.png`。
 可通过 `adb pull /sdcard/Android/data/com.storyteller_f.ping.debug/files/ 本地输出目录`
-取得。`am instrument` 的进程退出码不能单独证明通过，须检查 `OK (11 tests)`
+取得。`am instrument` 的进程退出码不能单独证明通过，须检查 `OK (19 tests)`
 及每个用例的状态；发生颜色超时时另存 `color-timeout.png`。
 
 合成视频位于 `ping/src/androidTest/assets/video-wallpaper`。需要重新生成时，使用
@@ -330,7 +333,7 @@ ffmpeg -y -f lavfi -i "color=c=red:s=640x360:r=15:d=4" `
 ### 2026-11-08 验证结果
 
 原项目 Debug APK 在 Android 16 / API 36.1、x86_64 模拟器上完成以下验证，
-8 项系统壁纸测试及 3 项 GPU 测试全部通过：
+9 项系统壁纸测试、7 项恢复流程测试及 3 项 GPU 测试全部通过：
 
 | 场景 | 实际断言 |
 | --- | --- |
@@ -342,6 +345,8 @@ ffmpeg -y -f lavfi -i "color=c=red:s=640x360:r=15:d=4" `
 | 无首帧的候选视频 | GPU 逐像素验证缺失尺寸、新尺寸已到但首帧未到、旧来源晚到回调均不改变旧图像与裁剪；候选首帧到达后才切换 |
 | 准备失败及恢复 | 真实文件准备失败时保留旧画面；随后选择有效视频能继续播放，并释放被替换输出 |
 | 环境恢复 | 分别验证原静态壁纸和原 Ping 视频壁纸组件、选择参数与动态画面得到恢复 |
+| 清理超时后的恢复 | 实际停用测试引擎后注入清理等待超时，验证首次异常原样重抛，原组件与选择恢复，原视频继续产生动态画面 |
+| 恢复失败及取消 | 验证超时、连续失败、参数/组件恢复失败、停止阶段取消及调用方取消；后续阶段仍执行，附加异常顺序正确，不吞掉取消 |
 
 本轮复现了旧实现的 context 恢复持续黑屏：先释放 SurfaceTexture 会废弃解码器仍在
 使用的 BufferQueue；改为先解绑到 null 后，暂停中的视频解码器仍可能不能恢复产帧。

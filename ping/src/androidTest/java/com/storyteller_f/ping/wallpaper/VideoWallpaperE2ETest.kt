@@ -13,6 +13,8 @@ import com.storyteller_f.ping.pagerDataStore
 import com.storyteller_f.ping.preview
 import com.storyteller_f.ping.selected
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -54,7 +56,8 @@ class VideoWallpaperE2ETest {
     @After fun restore() = runBlocking<Unit> {
         val environment = environment ?: return@runBlocking
         try { environment.restore() } finally {
-            if (::directory.isInitialized) directory.deleteRecursively()
+            // 参数恢复失败时保留可能仍被选择的媒体，不让失败的恢复留下悬空路径。
+            if (::directory.isInitialized && environment.selectionRestored) directory.deleteRecursively()
         }
     }
 
@@ -197,6 +200,35 @@ class VideoWallpaperE2ETest {
         await("restored original video") { engine()?.snapshot()?.playerState == "playing" }
         awaitColor(Color.BLUE)
         assertMoving("restored-original-video")
+    }
+
+    @Test fun cleanupTimeoutStillRestoresOriginalVideoAndSelection() = runBlocking<Unit> {
+        select("blue")
+        awaitColor(Color.BLUE)
+        var cleanupTimeout: TimeoutCancellationException? = null
+        val saved = WallpaperTestEnvironment.capture(context, manager, ::setComponent, stop = {
+            WallpaperTestEnvironment.stopVideo(::setComponent)
+            try {
+                withTimeout(1) { awaitCancellation() }
+            } catch (failure: TimeoutCancellationException) {
+                cleanupTimeout = failure
+                throw failure
+            }
+        })
+        select("green")
+        awaitColor(Color.GREEN)
+        val reported = try {
+            saved.restore()
+            error("Cleanup timeout must still be reported")
+        } catch (failure: TimeoutCancellationException) { failure }
+        assertSame(cleanupTimeout, reported)
+        assertTrue(saved.selectionRestored)
+        assertEquals(component, manager.wallpaperInfo?.component)
+        assertEquals(File(directory, "blue.mp4").path, context.pagerDataStore.data.first()[selected])
+        home()
+        await("restored video despite cleanup timeout") { engine()?.snapshot()?.playerState == "playing" }
+        awaitColor(Color.BLUE)
+        assertMoving("restored-after-cleanup-timeout")
     }
 
     @Test fun environmentRestoresPreviouslyStaticWallpaper() = runBlocking<Unit> {
