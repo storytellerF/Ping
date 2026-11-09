@@ -3,8 +3,6 @@ package com.storyteller_f.ping.shader
 import android.content.Context
 import android.opengl.GLES30
 import com.storyteller_f.ping.R
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
 
 /**
  * 面向 OpenGL ES 3.0 的壁纸渲染器。
@@ -22,8 +20,7 @@ internal class GLES30WallpaperRenderer(context: Context) :
     /**
      * 创建并配置 VAO，记录 VBO/EBO 的绑定关系，之后绘制只需绑定 VAO。
      */
-    override fun onSurfaceCreated(gl10: GL10, eglConfig: EGLConfig) { // Surface 创建回调
-        initGl() // 初始化固定 GL 状态
+    override fun initializeGeometry() { // Surface 创建回调
 
         //VAO 顶点数组对象
         GLES30.glGenVertexArrays(vertexArrays.size, vertexArrays, 0) // 生成 VAO 句柄数组
@@ -45,7 +42,7 @@ internal class GLES30WallpaperRenderer(context: Context) :
         GLES30.glDrawElements(
             GLES30.GL_TRIANGLES, // 三角形绘制模式
             6,//组成一个矩形的索引数（两个三角形）
-            GLES30.GL_UNSIGNED_INT, // 索引类型
+            GLES30.GL_UNSIGNED_SHORT, // 索引类型
             0 // 从索引缓冲起始位置开始
         )
         GLES30.glBindVertexArray(0) // 解绑 VAO，清理状态

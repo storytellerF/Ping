@@ -17,9 +17,10 @@ import android.opengl.GLES20 // OpenGL ES 2.0 接口
 import java.nio.ByteBuffer // 直接缓冲区分配（原生内存）
 import java.nio.ByteOrder // 指定字节序为本机字节序
 import java.nio.FloatBuffer // 浮点型缓冲视图
-import java.nio.IntBuffer // 整型缓冲视图
+import java.nio.ShortBuffer // 整型缓冲视图
 
-open class GLBuffer { // 封装 VBO/EBO 的创建与数据上传
+/** 必须在当前 EGL context 的 GL 线程构造；句柄随该 context 销毁。 */
+internal class GLBuffer { // 封装 VBO/EBO 的创建与数据上传
 
     private val vertices: FloatBuffer = run { // 顶点坐标缓冲的构建
         // 屏幕覆盖用的四个顶点（两个三角形），范围为裁剪空间 [-1, 1]
@@ -57,12 +58,12 @@ open class GLBuffer { // 封装 VBO/EBO 的创建与数据上传
     /**
      * 用于 EBO 的索引数据，按照两个三角形的绘制顺序组织，避免重复顶点传输。
      */
-    private val indicesBuffer: IntBuffer = run { // 索引缓冲的构建（EBO 数据）
-        val indexArray = intArrayOf(0, 1, 2, 3, 2, 1) // 两个三角形的索引顺序
+    private val indicesBuffer: ShortBuffer = run { // ES2 核心支持 16 位索引，无需扩展。
+        val indexArray = shortArrayOf(0, 1, 2, 3, 2, 1) // 两个三角形的索引顺序
         ByteBuffer.allocateDirect( // 分配原生内存
-            indexArray.size * BYTES_PER_INT // 计算容量
+            indexArray.size * Short.SIZE_BYTES // 计算容量
         ).run {
-            order(ByteOrder.nativeOrder()).asIntBuffer().apply { // 整型视图
+            order(ByteOrder.nativeOrder()).asShortBuffer().apply { // 整型视图
                 put(indexArray).position(0) // 写入并归位
             }
         }
@@ -78,7 +79,7 @@ open class GLBuffer { // 封装 VBO/EBO 的创建与数据上传
      * - 先 `glGenBuffers` 申请句柄，再分别绑定并通过 `glBufferData` 上传。
      * - 每次上传后主动解除绑定，避免后续错误地写入同一目标；这是典型的 OpenGL 习惯用法。
      */
-    private val buffers: IntArray by lazy { // GPU 端缓冲对象句柄，延迟创建
+    private val buffers: IntArray = run { // 当前 context 的 GPU 端缓冲对象句柄
         IntArray(3).apply { // 依次存放：位置 VBO、纹理 VBO、索引 EBO
             //获取指定的缓冲区
             GLES20.glGenBuffers(size, this, 0) // 生成 3 个缓冲对象 id 到数组
@@ -104,7 +105,7 @@ open class GLBuffer { // 封装 VBO/EBO 的创建与数据上传
             GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, this[2]) // 绑定索引缓冲到 ELEMENT_ARRAY_BUFFER
             GLES20.glBufferData( // 上传索引数据到 GPU
                 GLES20.GL_ELEMENT_ARRAY_BUFFER,
-                indicesBuffer.capacity() * BYTES_PER_INT, // 字节数
+                indicesBuffer.capacity() * Short.SIZE_BYTES, // 字节数
                 indicesBuffer, // 源索引数据
                 GLES20.GL_STATIC_DRAW // 静态使用
             )

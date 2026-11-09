@@ -3,8 +3,6 @@ package com.storyteller_f.ping.shader
 import android.content.Context
 import android.opengl.GLES20
 import com.storyteller_f.ping.R
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
 
 /**
  * 面向 OpenGL ES 2.0 的壁纸渲染器。
@@ -20,21 +18,15 @@ internal class GLES20WallpaperRenderer(context: Context) :
         R.raw.fragment_20, // 片元着色器资源 id（ES 2.0 版本）
         2 // 指定使用的 GL 版本号
     ) {
-    private val positionLocation by lazy { GLES20.glGetAttribLocation(program, "in_position") } // 查询位置 attribute 的索引
-    private val texCoordinationLocation by lazy { // 查询纹理坐标 attribute 的索引
-        GLES20.glGetAttribLocation(
-            program, // 指定当前程序对象
-            "in_texture_coordination" // attribute 名称需与着色器保持一致
-        )
-    }
+    private var positionLocation = -1
+    private var texCoordinationLocation = -1
 
     /**
      * 初始化 GL 状态与着色器变量位置。
      */
-    override fun onSurfaceCreated(gl10: GL10, eglConfig: EGLConfig) {
-        initGl() // 关闭不必要的状态并初始化绑定
-        positionLocation // 触发 lazy 计算以缓存 attribute 索引
-        texCoordinationLocation // 同上，触发缓存
+    override fun initializeGeometry() {
+        positionLocation = GLES20.glGetAttribLocation(program, "in_position")
+        texCoordinationLocation = GLES20.glGetAttribLocation(program, "in_texture_coordination")
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f) // 设置清屏颜色为不透明黑色
     }
 
@@ -47,7 +39,7 @@ internal class GLES20WallpaperRenderer(context: Context) :
         bindData(buffers[1], texCoordinationLocation) // 绑定纹理坐标 VBO 到 attribute 位置
 
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, buffers[2]) // 绑定索引缓冲
-        GLES20.glDrawElements(GLES20.GL_TRIANGLES, 6, GLES20.GL_UNSIGNED_INT, 0) // 按索引绘制两个三角形
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, 6, GLES20.GL_UNSIGNED_SHORT, 0) // 按索引绘制两个三角形
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0) // 解绑索引缓冲，清理状态
 
         GLES20.glDisableVertexAttribArray(texCoordinationLocation) // 关闭纹理坐标 attribute

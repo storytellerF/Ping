@@ -273,3 +273,95 @@ Tegra 扩展分支未在对应硬件上实测。
 这段剩余黑屏属于系统预览 Activity，普通壁纸应用不能修改该遮罩。继续优化 Core
 或更早提交背景帧无法移除它；自建应用内预览也只能避开浏览阶段的遮罩，最终进入
 系统设置确认仍受系统预览控制。本次未修改系统应用、全局动画设置或交互流程。
+
+
+## 视频壁纸端到端验证
+
+`VideoWallpaperE2ETest` 在系统实际桌面壁纸中运行 `PingPagerService`，通过真实
+DataStore 选择、MediaPlayer 解码、SurfaceTexture 和 EGL 绘制链路验证生命周期。
+它使用测试包内的三段合成 H.264 MP4：红色、蓝色均为 640×360，绿色为 360×640，
+均为 4 秒、15 fps、无音轨，叠加移动的 `testsrc2` 图案。没有使用用户媒体。
+断言包括桌面颜色、中心区域跨帧像素变化、播放器对象及进度、Surface 释放和 GL 线程退出。
+
+测试会替换设备当前壁纸，因此默认跳过，须在独占的专用测试设备上显式启用。
+恢复先停用测试壁纸并等待 GL 清理，再恢复选择参数，最后重新应用原组件，
+包括测试前已经启用 Ping 视频壁纸的情况。测试文件使用独立的临时目录，恢复完成
+后仅删除本轮创建的目录。清理超时或某一步恢复失败时，仍继续执行其余恢复步骤，
+最后重新抛出第一次异常，并按顺序附加后续异常。父协程取消期间也会完成有界恢复，
+每步挂起等待最多 15 秒；选择参数未恢复成功时保留测试媒体，避免留下悬空路径。
+静态壁纸恢复路径
+面向系统使用 `com.android.systemui.wallpapers.ImageWallpaper` 的 Android 测试镜像。
+测试通过 Debug 构建的只读生命周期快照观察 Engine、播放器及输出状态，不再反射
+framework 的活动 Engine 容器、私有 GL 线程字段或 Kotlin 委托字段。context 保留策略
+通过独立的 Debug 控制入口设置；Release/Alpha 共用 `src/nonDebug/kotlin` 的空实现，
+不保留诊断对象或测试控制。唯一的 framework 反射边界是系统壁纸激活 API，仍需仅对
+本次 instrumentation 进程启用 `--no-hidden-api-checks`；不修改全局 hidden API 设置或
+生产应用权限。
+
+先构建并安装原项目的两个 Debug APK，以下为 PowerShell 命令；替换 `DEVICE_SERIAL`：
+
+```powershell
+./gradlew.bat :ping:assembleDebug :ping:assembleDebugAndroidTest :ping:testDebugUnitTest :ping:lintDebug
+adb -s DEVICE_SERIAL install -r ping/build/outputs/apk/debug/ping-debug.apk
+adb -s DEVICE_SERIAL install -r ping/build/outputs/apk/androidTest/debug/ping-debug-androidTest.apk
+adb -s DEVICE_SERIAL shell am instrument --no-hidden-api-checks -w -r `
+  -e videoWallpaperE2E true `
+  -e class "com.storyteller_f.ping.wallpaper.WallpaperTestEnvironmentTest,com.storyteller_f.ping.wallpaper.VideoWallpaperE2ETest,com.storyteller_f.ping.shader.WallpaperRendererTest" `
+  com.storyteller_f.ping.debug.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+测试截图保存在目标应用外部文件目录中，名称为 `video-switching.png`、
+`hidden-resumed.png`、`engine-reapplied.png` 和 `egl-recreated.png`。
+可通过 `adb pull /sdcard/Android/data/com.storyteller_f.ping.debug/files/ 本地输出目录`
+取得。`am instrument` 的进程退出码不能单独证明通过，须检查 `OK (19 tests)`
+及每个用例的状态；发生颜色超时时另存 `color-timeout.png`。
+
+合成视频位于 `ping/src/androidTest/assets/video-wallpaper`。需要重新生成时，使用
+FFmpeg 的 `color` 和 `testsrc2` 源，不需要网络或外部视频。例如红色视频：
+
+```powershell
+ffmpeg -y -f lavfi -i "color=c=red:s=640x360:r=15:d=4" `
+  -f lavfi -i "testsrc2=s=120x120:r=15:d=4" `
+  -filter_complex "[0:v][1:v]overlay=x='mod(t*120,main_w-overlay_w)':y='(main_h-overlay_h)/2':shortest=1" `
+  -c:v libx264 -pix_fmt yuv420p -preset fast -crf 24 -movflags +faststart `
+  ping/src/androidTest/assets/video-wallpaper/red.mp4
+```
+
+蓝色改用 `color=c=blue:s=640x360`，绿色改用 `color=c=lime:s=360x640`，
+同时保留帧率和时长参数，分别输出 `blue.mp4`、`green.mp4`。
+
+### 2026-11-08 验证结果
+
+原项目 Debug APK 在 Android 16 / API 36.1、x86_64 模拟器上完成以下验证，
+9 项系统壁纸测试、7 项恢复流程测试及 3 项 GPU 测试全部通过：
+
+| 场景 | 实际断言 |
+| --- | --- |
+| 视频切换 | 5 次切换，包含同尺寸和横竖尺寸变化；Engine 不替换，旧播放器释放，新画面颜色正确且持续变化 |
+| 隐藏恢复 | 3 轮打开系统设置后返回桌面；隐藏时进度停止，返回后同一 Engine 和播放器恢复动态画面 |
+| Engine 销毁 | 改用系统静态壁纸，验证播放器、Surface、GL 线程和订阅释放；修改选择不会唤醒旧 Engine，重新应用能播放新视频 |
+| EGL context 重建 | 3 轮关闭 context 保留后通过实际可见性回调触发 pause/resume；旧输出失效，新输出绑定，同一播放器恢复动态画面 |
+| 已暂停时销毁 | context 已销毁且旧生产队列仍待替换时，Engine 退出仍能释放 SurfaceTexture 并结束 GL 线程 |
+| 无首帧的候选视频 | GPU 逐像素验证缺失尺寸、新尺寸已到但首帧未到、旧来源晚到回调均不改变旧图像与裁剪；候选首帧到达后才切换 |
+| 准备失败及恢复 | 真实文件准备失败时保留旧画面；随后选择有效视频能继续播放，并释放被替换输出 |
+| 环境恢复 | 分别验证原静态壁纸和原 Ping 视频壁纸组件、选择参数与动态画面得到恢复 |
+| 清理超时后的恢复 | 实际停用测试引擎后注入清理等待超时，验证首次异常原样重抛，原组件与选择恢复，原视频继续产生动态画面 |
+| 恢复失败及取消 | 验证超时、连续失败、参数/组件恢复失败、停止阶段取消及调用方取消；后续阶段仍执行，附加异常顺序正确，不吞掉取消 |
+
+本轮复现了旧实现的 context 恢复持续黑屏：先释放 SurfaceTexture 会废弃解码器仍在
+使用的 BufferQueue；改为先解绑到 null 后，暂停中的视频解码器仍可能不能恢复产帧。
+现在旧输出先失效，生产队列保留到新 Surface 直接替换或播放器关闭，再由 GL 线程释放。
+`OutputLease` 原子协调取得、撤销和归还生产者所有权，防止交接与 context 销毁之间的竞争。
+Engine 关闭先断开生产者，GL 清理事件完成后才退出线程，覆盖已经没有当前 context 的状态。
+
+帧状态按视频来源独立持有，区分等待首帧与已有画面；每次选择新视频都有独立输出，
+避免新尺寸重新解释旧来源的纹理。新帧接替前，保留图像仍以其自身尺寸计算裁剪。
+同一 EGL context 内不再显示的旧纹理显式删除；旧 context 的句柄不带入新 context。
+`OutputSession` 统一取得、绑定、替换及归还输出，平台适配器内部完成 Surface 释放、
+生产者所有权归还及 GL 清理通知。绑定失败先停止可能已连接的生产者，再归还候选。
+
+20 项原项目 JVM 单元测试通过，包含输出替换顺序、来源失效、晚到通知及失败清理；
+Debug 应用/测试包构建、Release/Alpha Kotlin 编译及 `lintDebug` 通过，
+Lint 为 0 错误、36 项警告。本轮不代表真机硬件解码器、GPU 驱动异常重置、其他视频
+编码/旋转元数据或应用导入与系统确认按钮流程均已覆盖；context 测试通过关闭
+`preserveEGLContextOnPause` 确定性触发真实 EGL 销毁及重建，没有模拟 GPU 驱动故障。
