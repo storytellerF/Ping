@@ -1,9 +1,13 @@
 name: Android CI
 
 on:
+  release:
+    types: [published]
   push:
     branches: [ "main" ]
-    tags: [ "*" ]
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name }}
 
 jobs:
   build:
@@ -23,7 +27,7 @@ jobs:
           SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY }}
         run: |
           if [[ -z "$SIGNING_KEY_BASE64" ]]; then
-            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
               echo "Release signing key is required for tagged builds" >&2
               exit 1
             fi
@@ -35,7 +39,7 @@ jobs:
 
       - name: Build app
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             bash gradlew :ping:assembleRelease
           else
             bash gradlew :ping:assembleAlpha
@@ -57,7 +61,7 @@ jobs:
   release:
     name: Upload release assets
     needs: build
-    if: startsWith(github.ref, 'refs/tags/')
+    if: (github.event_name == 'release')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -71,13 +75,6 @@ jobs:
           name: ping-apk
           path: release-assets
 
-      - name: Create release when missing
-        shell: bash
-        run: |
-          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
-          fi
-
       - name: Upload release assets
         shell: bash
         run: |
@@ -86,4 +83,4 @@ jobs:
             echo "No release assets found" >&2
             exit 1
           fi
-          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
